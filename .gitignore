@@ -12,3 +12,4 @@ target/
 .idea/
 .vscode/*
 !.vscode/extensions.json
+.agents/

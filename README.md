@@ -28,7 +28,7 @@ The landing page is static; open `landing/index.html` directly or serve the `lan
 
 ## Status
 
-Cue is a prototype. Browser and sandbox runs require valid provider credentials and network access. The acceptance checklist tracks packaging, portability, and end-to-end verification; do not treat this repository as a stable release yet.
+Cue is a prototype. Browser and sandbox runs require valid provider credentials and network access. The current sidecar is Apple Silicon-only. The acceptance checklist tracks packaging, portability, and end-to-end verification; do not treat this repository as a stable release yet.
 
 ## License
 
