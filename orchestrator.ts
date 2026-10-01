@@ -1074,7 +1074,7 @@ function readQuestionAnswer(timeoutMs: number): Promise<string | null> {
       done = true;
       clearTimeout(timer);
       try {
-        rl.close();
+        rl?.close();
       } catch {
         /* ignore */
       }
@@ -1083,7 +1083,7 @@ function readQuestionAnswer(timeoutMs: number): Promise<string | null> {
     const timer = setTimeout(() => finish(null), timeoutMs);
     // Timer allein hält nichts unnötig wach, blockiert aber auch nichts.
     timer.unref?.();
-    let rl: any;
+    let rl: ReturnType<typeof readline.createInterface> | undefined;
     try {
       rl = readline.createInterface({ input: process.stdin });
     } catch {

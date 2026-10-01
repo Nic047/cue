@@ -43,10 +43,7 @@ const MAX_ERROR_PILL_W = 480;
 
 const ICON_SIZE = 20;
 export const PANEL_W = 520;
-export const PANEL_H = 120; // Legacy-Export (Frage nutzt jetzt PILL_HEIGHT)
-export const PANEL_COLLAPSED_H = 64; // Legacy-Export (Collapse entfernt)
 export const PILL_HEIGHT = 400; // DIE fixe Hoehe aller Status-Zustaende
-export const DONE_W = 480; // Legacy-Export (Done nutzt jetzt Pill-Breite)
 // Detail-Overlay: fallback size when monitor dimensions are unavailable.
 export const OVERLAY_W = 1100;
 export const OVERLAY_H = 540;
@@ -64,7 +61,6 @@ const RECENT_CHATS_H = 380;
 function log(line: string) {
   void invoke("log_line", { line });
 }
-void log;
 
 function presentWindow(size: { width: number; height: number }, animate = false) {
   return invoke("show_window", { ...size, animate });

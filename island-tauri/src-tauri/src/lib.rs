@@ -8,11 +8,6 @@ mod onboarding;
 mod orchestrator_bridge;
 use orchestrator_bridge::OrchestratorState;
 
-#[tauri::command]
-fn greet(name: &str) -> String {
-    format!("Hello, {}! You've been greeted from Rust!", name)
-}
-
 /// Frontend-Logs ins Terminal durchreichen (Webview-Console ist unsichtbar).
 #[tauri::command]
 fn log_line(line: String) {
@@ -69,7 +64,6 @@ pub fn run() {
             native_audio::start_mic_check,
             native_audio::microphone_level,
             native_audio::stop_mic_check,
-            greet,
             log_line,
             orchestrator_bridge::run_task,
             orchestrator_bridge::kill_task,
