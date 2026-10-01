@@ -1,0 +1,16 @@
+/* Cue system — adapted from the visual direction of devin.ai. */
+:root {
+  --text: #191919;
+  --background: #f8f8f8;
+  --surface: #ffffff;
+  --muted: #787878;
+  --border: #e2e2e2;
+  --primary: #191919;
+  --sky: #b4c7ba;
+  --button: #000000;
+  --page: 1248px;
+  --font-sans: Geist, Arial, sans-serif;
+  --radius-card: 12px;
+  --radius-control: 999px;
+  --space-unit: 8px;
+}

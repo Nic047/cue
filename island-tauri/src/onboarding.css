@@ -1,0 +1,1087 @@
+html:has(.onboarding) #root {
+  padding: 20px;
+  box-sizing: border-box;
+}
+.onboarding {
+  position: relative;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 24px;
+  overflow: hidden;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.3);
+  --ob-ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  color: #f0f0f0;
+  background: #0c0c0c;
+  height: 100%;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  -webkit-font-smoothing: antialiased;
+  box-sizing: border-box;
+}
+.onboarding *,
+.onboarding *::before,
+.onboarding *::after {
+  box-sizing: border-box;
+}
+.ob-drag {
+  height: 38px;
+  flex-shrink: 0;
+}
+.ob-header {
+  padding: 16px 44px 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: #666;
+  font-size: 11px;
+}
+.ob-wordmark {
+  color: #eee;
+  font-weight: 600;
+  font-size: 22px;
+  letter-spacing: -1.2px;
+}
+.ob-wordmark span {
+  color: #777;
+}
+.ob-pages {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.ob-screen {
+  position: absolute;
+  inset: 0;
+  padding: 44px 44px 16px;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #333 transparent;
+}
+.ob-eyebrow {
+  color: #787878;
+  font-size: 10px;
+  letter-spacing: 1.7px;
+  font-weight: 500;
+  margin: 0 0 16px;
+}
+.onboarding h1 {
+  font-size: 32px;
+  line-height: 1.18;
+  font-weight: 500;
+  letter-spacing: -1.1px;
+  margin: 0;
+  text-wrap: balance;
+}
+.ob-lead {
+  color: #888;
+  line-height: 1.65;
+  margin: 14px 0 28px;
+  font-size: 13px;
+}
+.onboarding h2 {
+  font-size: 13px;
+  font-weight: 500;
+  margin: 0 0 7px;
+}
+.onboarding button {
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  transition:
+    background 150ms,
+    color 150ms,
+    transform 200ms var(--ob-ease-out);
+}
+.onboarding button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.onboarding button:focus-visible,
+.onboarding input:focus-visible,
+.onboarding summary:focus-visible {
+  outline: 2px solid #aaa;
+  outline-offset: 4px;
+}
+.ob-primary,
+.ob-secondary {
+  display: inline-flex;
+  gap: 9px;
+  align-items: center;
+  justify-content: center;
+  padding: 11px 17px;
+  border-radius: 9px;
+  font-weight: 500;
+}
+.ob-primary {
+  background: #eee;
+  color: #111;
+  border: 1px solid #eee;
+}
+
+.ob-secondary {
+  color: #ddd;
+  border: 1px solid #303030;
+  background: #191919;
+  white-space: nowrap;
+}
+
+.ob-back,
+.ob-text-button {
+  border: 0;
+  background: none;
+  color: #888;
+  padding: 8px 0;
+}
+.ob-back {
+  padding: 10px 16px;
+}
+.ob-text-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.ob-footer {
+  margin: 0 44px;
+  padding: 22px 0 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-top: 1px solid #232323;
+  flex-shrink: 0;
+  height: 94px;
+  min-height: 94px;
+}
+.ob-footer > span {
+  color: #666;
+  font-size: 10px;
+  letter-spacing: 1px;
+}
+.ob-footer > div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ob-footer-help {
+  color: #777;
+  font-size: 11px;
+}
+.ob-welcome-art {
+  height: 178px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 24px;
+}
+.ob-orbit {
+  position: absolute;
+  width: 330px;
+  height: 150px;
+  background: radial-gradient(ellipse, #ffffff08, transparent 70%);
+  pointer-events: none;
+}
+.ob-demo-pill {
+  position: relative;
+  width: 248px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 42px;
+  padding: 0 28px;
+  font-size: 13px;
+  z-index: 1;
+}
+.ob-demo-copy {
+  position: relative;
+  width: 116px;
+  height: 18px;
+  flex-shrink: 0;
+}
+.ob-demo-copy > span {
+  position: absolute;
+  inset: 0;
+  white-space: nowrap;
+}
+.ob-permission {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 24px 0;
+  border-bottom: 1px solid #232323;
+}
+.ob-permission > svg {
+  color: #aaa;
+  flex-shrink: 0;
+}
+.ob-permission > div {
+  flex: 1;
+}
+.ob-permission p {
+  color: #888;
+  line-height: 1.5;
+  font-size: 12px;
+  margin: 0;
+}
+.ob-permission small {
+  display: block;
+  color: #b99b88;
+  margin-top: 8px;
+  line-height: 1.5;
+}
+.ob-granted {
+  color: #bbb;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+}
+.ob-footnote {
+  color: #606060;
+  font-size: 11px;
+  line-height: 1.6;
+  margin-top: 20px;
+}
+.ob-meter {
+  height: 96px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  justify-content: center;
+  margin: 32px 0 12px;
+}
+.ob-meter i {
+  flex: 1;
+  max-width: 7px;
+  height: 42px;
+  background: #e1e1e1;
+  border-radius: 4px;
+  transition:
+    transform 100ms var(--ob-ease-out),
+    opacity 100ms ease;
+}
+
+.ob-meter-caption {
+  color: #a0a0a0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  margin-bottom: 34px;
+}
+.ob-device {
+  color: #888;
+  font-size: 11px;
+  display: grid;
+  gap: 10px;
+}
+.ob-device-picker {
+  position: relative;
+}
+.ob-device-trigger {
+  color: #ddd;
+  background: #171717;
+  border: 1px solid #303030;
+  padding: 11px 13px;
+  border-radius: 9px;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  cursor: pointer;
+  list-style: none;
+  font-size: 12px;
+}
+
+.ob-device-trigger span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ob-device-trigger[aria-expanded="true"] svg {
+  transform: rotate(180deg);
+}
+.ob-device-options {
+  position: absolute;
+  z-index: 20;
+  bottom: calc(100% + 6px);
+  transform-origin: bottom center;
+  left: 0;
+  right: 0;
+  max-height: 190px;
+  overflow-y: auto;
+  padding: 5px;
+  background: #1b1b1b;
+  border: 1px solid #333;
+  border-radius: 10px;
+  box-shadow: 0 10px 25px #0006;
+}
+.ob-device-options button {
+  width: 100%;
+  min-height: 35px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 7px 9px;
+  color: #d0d0d0;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  text-align: left;
+}
+.ob-device-options button:hover,
+.ob-device-options button:focus-visible {
+  background: #303030;
+}
+.ob-device-options button[aria-selected="true"] {
+  color: #fff;
+}
+.ob-hint {
+  background: #161616;
+  border: 1px solid #282828;
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin-top: 16px;
+  font-size: 12px;
+  color: #aaa;
+  line-height: 1.6;
+}
+.ob-hint button {
+  color: #ddd;
+  padding: 8px 0 0;
+  background: none;
+  border: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  text-align: left;
+}
+.ob-keys {
+  display: grid;
+  gap: 19px;
+}
+.ob-key-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 9px;
+}
+.ob-key-label button {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: #888;
+  font-size: 11px;
+  border: 0;
+  background: none;
+  padding: 0;
+}
+.ob-input {
+  display: flex;
+  align-items: center;
+  border: 1px solid #303030;
+  background: #151515;
+  border-radius: 8px;
+  padding-right: 13px;
+}
+.ob-input:focus-within {
+  border-color: #777;
+}
+.ob-input input {
+  background: none;
+  border: 0;
+  padding: 12px 13px;
+  color: #ddd;
+  flex: 1;
+  width: 0;
+  font-family: inherit;
+  font-size: 12px;
+}
+.ob-input input:focus-visible {
+  outline: 0;
+}
+.ob-input input::placeholder {
+  color: #666;
+}
+.ob-input.invalid {
+  border-color: #77574b;
+}
+.ob-key > p {
+  color: #686868;
+  font-size: 10px;
+  line-height: 1.5;
+  margin: 7px 0 0;
+}
+.ob-key > p.ob-field-error {
+  color: #c3a591;
+}
+.ob-field-error button {
+  border: 0;
+  background: none;
+  color: #ddd;
+  margin-left: 6px;
+  text-decoration: underline;
+}
+.ob-privacy {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  color: #999;
+  font-size: 11px;
+  line-height: 1.6;
+  margin-top: 25px;
+}
+.ob-privacy svg {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+.ob-privacy > span > span {
+  display: block;
+}
+.ob-lesson {
+  display: flex;
+  gap: 16px;
+  padding: 19px 0;
+  border-bottom: 1px solid #222;
+}
+.ob-lesson:first-of-type {
+  padding-top: 0;
+}
+.ob-lesson-number {
+  border: 1px solid #333;
+  border-radius: 50%;
+  width: 25px;
+  height: 25px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 10px;
+  color: #888;
+}
+.ob-lesson > div {
+  min-width: 0;
+}
+.ob-lesson p {
+  color: #888;
+  font-size: 11px;
+  line-height: 1.6;
+  margin: 7px 0;
+}
+.onboarding kbd {
+  font-family: inherit;
+  font-size: 11px;
+  padding: 3px 6px;
+  border: 1px solid #3a3a3a;
+  border-radius: 5px;
+  color: #ccc;
+  background: #202020;
+  white-space: nowrap;
+}
+.ob-lesson blockquote {
+  margin: 12px 0;
+  color: #ddd;
+  line-height: 1.6;
+  font-size: 13px;
+  max-width: 340px;
+}
+.ob-lesson.active .ob-lesson-number {
+  border-color: #aaa;
+  color: #eee;
+}
+.ob-live {
+  color: #aaa;
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  line-height: 1.5;
+}
+.ob-completed {
+  color: #bbb;
+  font-size: 11px;
+}
+.ob-spinner {
+  animation: ob-spin 1s linear infinite;
+}
+.ob-error {
+  color: #c3a591;
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.ob-finish-icon {
+  width: 66px;
+  height: 66px;
+  border: 1px solid #333;
+  background: #151515;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  margin: 12px 0 32px;
+  color: #ccc;
+}
+.ob-reminders {
+  margin-top: 28px;
+}
+.ob-reminders p {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  border-bottom: 1px solid #232323;
+  padding: 18px 0;
+  margin: 0;
+  color: #999;
+  font-size: 12px;
+}
+.ob-reminders kbd {
+  min-width: 52px;
+  text-align: center;
+}
+.ob-reminders p:last-child > div {
+  margin: 0 17px;
+}
+@keyframes ob-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .onboarding * {
+    animation: none !important;
+  }
+  .onboarding * {
+    transition: none !important;
+  }
+}
+@media (max-width: 540px) {
+  .ob-header,
+  .ob-screen {
+    padding-left: 24px;
+    padding-right: 24px;
+  }
+  .ob-footer {
+    margin: 0 24px;
+  }
+  .ob-permission {
+    flex-wrap: wrap;
+  }
+  .ob-permission > div {
+    min-width: 200px;
+  }
+}
+
+.ob-screen-3 {
+  padding-top: 30px;
+}
+.ob-screen-3 .ob-lead {
+  margin-bottom: 17px;
+}
+.ob-screen-3 .ob-keys {
+  gap: 8px;
+}
+.ob-screen-3 .ob-privacy {
+  margin-top: 15px;
+}
+
+.ob-demo-pill > span,
+.ob-demo-pill > .dmx-root {
+  position: relative;
+  z-index: 1;
+}
+.ob-demo-pill > .dmx-root {
+  transform: translateX(10px);
+}
+
+.ob-footer .ob-primary {
+  min-width: 144px;
+}
+.onboarding button:active:not(:disabled) {
+  transform: scale(0.995);
+}
+.ob-input-status {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+}
+.ob-check,
+.ob-granted svg,
+.ob-finish-icon svg {
+  animation: ob-check-in 180ms
+    var(--ob-ease-out, cubic-bezier(0.23, 1, 0.32, 1)) both;
+}
+.ob-lesson {
+  transition: opacity 180ms ease;
+}
+.ob-lesson.complete {
+  opacity: 0.65;
+}
+.ob-lesson h2 {
+  color: #aaa;
+  transition: color 180ms ease;
+}
+.ob-lesson.active h2 {
+  color: #f5f5f5;
+}
+.ob-lesson-number {
+  transition:
+    color 180ms ease,
+    border-color 180ms ease;
+}
+.ob-key-cue {
+  animation: ob-key-cue 1800ms cubic-bezier(0.77, 0, 0.175, 1) infinite;
+}
+.ob-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+@keyframes ob-check-in {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes ob-key-cue {
+  0%,
+  100% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+@media (hover: hover) and (pointer: fine) {
+  .ob-text-button:hover:not(:disabled) {
+    color: #eee;
+  }
+  .ob-primary:hover:not(:disabled) {
+    background: #fff;
+  }
+  .ob-secondary:hover:not(:disabled) {
+    background: #242424;
+  }
+}
+
+.ob-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  color: #777;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  z-index: 2;
+}
+@media (hover: hover) and (pointer: fine) {
+  .ob-close:hover {
+    color: #eee;
+    background: #222;
+  }
+}
+
+.ob-customize {
+  display: grid;
+  gap: 12px;
+}
+.ob-customize label {
+  color: #aaa;
+  font-size: 12px;
+}
+.ob-customize-hint {
+  margin: 0 0 12px;
+  color: #777;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.ob-welcome-reveal {
+  animation: ob-welcome-reveal 650ms var(--ob-ease-out) both;
+}
+@keyframes ob-welcome-reveal {
+  from {
+    opacity: 0;
+    filter: blur(8px);
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    filter: blur(0px);
+    transform: translateY(0px);
+  }
+}
+.ob-shortcut-record {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  min-height: 48px;
+  padding: 10px 14px;
+  border: 1px solid #303030;
+  border-radius: 10px;
+  background: #171717;
+  color: #ddd;
+}
+.ob-shortcut-record > span:last-child {
+  font-size: 11px;
+  color: #777;
+}
+.ob-shortcut-record[aria-pressed="true"] {
+  border-color: #aaa;
+  background: #202020;
+}
+.ob-model-picker {
+  position: relative;
+  min-width: 0;
+}
+.ob-model-trigger {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px;
+  color: #ddd;
+  background: #171717;
+  border: 1px solid #303030;
+  border-radius: 10px;
+  text-align: left;
+}
+.ob-model-summary {
+  display: grid;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+}
+.ob-model-summary small,
+.ob-model-options small {
+  color: #888;
+  font-size: 10px;
+  line-height: 1.4;
+  font-weight: 400;
+}
+.ob-model-options {
+  position: absolute;
+  z-index: 30;
+  bottom: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  max-height: 250px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 5px;
+  background: #1b1b1b;
+  border: 1px solid #333;
+  border-radius: 12px;
+  box-shadow: 0 10px 25px #0006;
+  transform-origin: bottom center;
+}
+.ob-model-options button {
+  display: grid;
+  gap: 5px;
+  width: 100%;
+  padding: 12px 10px;
+  text-align: left;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #ddd;
+}
+.ob-model-options button:focus-visible {
+  background: #303030;
+  outline-offset: -2px;
+}
+@media (hover: hover) and (pointer: fine) {
+  .ob-model-options button:hover {
+    background: #292929;
+  }
+}
+.ob-model-options button[aria-selected="true"] {
+  background: #252525;
+}
+.ob-model-name {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+}
+.ob-model-bars {
+  display: grid;
+  gap: 9px;
+  margin: 8px 0 4px;
+}
+.ob-model-metric {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 100px;
+  align-items: center;
+  gap: 22px;
+}
+.ob-model-metric-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  color: #999;
+  font-size: 10px;
+  font-weight: 400;
+}
+.ob-model-metric-label small {
+  color: #c0c0c0;
+}
+.ob-model-track {
+  display: block;
+  height: 3px;
+  background: #343434;
+  border-radius: 10px;
+  overflow: hidden;
+}
+.ob-model-track i {
+  display: block;
+  height: 100%;
+  background: #bababa;
+  border-radius: inherit;
+}
+.ob-model-pricing {
+  margin: -8px 0 0;
+  color: #777;
+  font-size: 10px;
+  line-height: 1.7;
+}
+.ob-model-pricing .ob-text-button {
+  display: inline-flex;
+  font-size: 10px;
+  padding: 0;
+  margin-left: 4px;
+}
+.ob-model-disclaimer {
+  margin-bottom: 0;
+  font-size: 10px;
+}
+.ob-screen-4 {
+  padding-top: 30px;
+}
+.ob-screen-4 .ob-lead {
+  margin-bottom: 20px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ob-welcome-reveal {
+    animation: none;
+  }
+}
+
+.ob-content {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  transition:
+    filter 240ms var(--ob-ease-out),
+    opacity 240ms var(--ob-ease-out);
+}
+.ob-content.is-recording {
+  filter: blur(10px);
+  opacity: 0.28;
+  pointer-events: none;
+}
+.ob-recorder {
+  position: absolute;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #0c0c0c55;
+  outline: none;
+}
+.ob-recorder-center {
+  width: 100%;
+  padding: 40px;
+  text-align: center;
+}
+.ob-recorder-center h1 {
+  font-size: 34px;
+  letter-spacing: -1.1px;
+}
+.ob-recorder-hint {
+  margin: 14px 0 0;
+  color: #777;
+  font-size: 13px;
+}
+.ob-recorded-keys {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: 132px;
+  padding: 28px 0;
+  flex-wrap: wrap;
+}
+.ob-recorded-keys kbd {
+  min-width: 72px;
+  min-height: 72px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px 20px;
+  font-size: 32px;
+  font-weight: 400;
+  border: 1px solid #414141;
+  border-bottom-width: 3px;
+  border-radius: 16px;
+  background: linear-gradient(#242424, #191919);
+  color: #eee;
+  box-shadow: 0 8px 18px #0003;
+}
+.ob-key-placeholder {
+  color: #555;
+  font-size: 14px;
+}
+.ob-recorder-confirm {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: #aaa;
+  font-size: 12px;
+  opacity: 0;
+  transform: translateY(3px);
+  transition:
+    opacity 180ms var(--ob-ease-out),
+    transform 180ms var(--ob-ease-out);
+}
+.ob-recorder-confirm[data-ready="true"] {
+  opacity: 1;
+  transform: translateY(0);
+}
+.ob-recorder-confirm kbd {
+  display: grid;
+  place-items: center;
+  padding: 7px 10px;
+  border-radius: 7px;
+}
+.ob-recorder-cancel {
+  color: #555;
+  font-size: 10px;
+  margin-top: 20px;
+}
+.ob-menu-detail {
+  margin: 28px 0 0;
+  color: #777;
+  font-size: 11px;
+  line-height: 1.7;
+}
+.ob-finish-icon {
+  position: relative;
+}
+.ob-finish-icon.is-celebrating {
+  animation: ob-finish-light 500ms var(--ob-ease-out) both;
+}
+.ob-finish-icon.is-celebrating::after {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border: 1px solid #ffffff70;
+  border-radius: inherit;
+  animation: ob-finish-ring 500ms var(--ob-ease-out) both;
+}
+@keyframes ob-finish-light {
+  0% {
+    background: #191919;
+    box-shadow: 0 0 0 #ffffff00;
+  }
+  45% {
+    background: #333;
+    box-shadow: 0 0 28px #ffffff20;
+  }
+  100% {
+    background: #191919;
+    box-shadow: 0 0 0 #ffffff00;
+  }
+}
+@keyframes ob-finish-ring {
+  from {
+    opacity: 0.7;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.4);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ob-content,
+  .ob-recorder-confirm {
+    transition: none;
+  }
+  .ob-finish-icon.is-celebrating,
+  .ob-finish-icon.is-celebrating::after {
+    animation: none;
+  }
+}
+
+/* Fit the first-run lesson in its card, without a scrolling page. */
+.ob-screen-5 {
+  overflow: hidden;
+  padding-top: 24px;
+  padding-bottom: 12px;
+}
+.ob-screen-5 .ob-eyebrow { margin-bottom: 10px; }
+.ob-screen-5 .ob-lead { margin: 10px 0 16px; }
+.ob-screen-5 .ob-lesson { padding: 12px 0; }
+.ob-screen-5 .ob-lesson blockquote {
+  max-width: none;
+  margin: 8px 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.ob-screen-5 .ob-lesson p { margin: 6px 0; line-height: 1.5; }
+
+/* Settings shares the setup controls and their native persistence. */
+.cue-settings .ob-content { display: grid; grid-template-columns: 174px minmax(0, 1fr); grid-template-rows: 66px minmax(0, 1fr) 76px; }
+.cue-settings .ob-header { grid-column: 1; grid-row: 1; padding: 22px 24px; border-right: 1px solid #ffffff0c; background: #101010; }
+.settings-nav { grid-column: 1; grid-row: 2 / 4; display: flex; flex-direction: column; gap: 6px; padding: 18px 12px; background: #101010; border-right: 1px solid #ffffff0c; }
+.settings-nav-title { display: flex; align-items: center; gap: 9px; padding: 0 12px 20px; color: #777; font-size: 11px; }
+.settings-nav button { display: flex; align-items: center; text-align: left; gap: 11px; padding: 13px 12px; border: 1px solid transparent; border-radius: 10px; color: #999; background: transparent; }
+.settings-nav button[aria-current] { background: #ffffff0a; border-color: #ffffff0c; color: #eee; }
+.settings-nav button span { font-size: 12px; font-weight: 500; }
+.settings-nav button small { display: block; margin-top: 4px; font-size: 9px; font-weight: 400; color: #666; }
+.settings-nav p { margin: auto 12px 4px; color: #888; font-size: 10px; line-height: 1.8; }
+.settings-nav p span { color: #555; }
+.cue-settings .ob-pages { grid-column: 2; grid-row: 1 / 3; }
+.cue-settings .ob-screen { padding: 48px 28px 20px; }
+.cue-settings h1 { font-size: 27px; letter-spacing: -.8px; }
+.cue-settings .ob-lead { font-size: 12px; line-height: 1.7; margin-bottom: 24px; }
+.cue-settings .ob-eyebrow { font-size: 9px; }
+.cue-settings .ob-close { z-index: 5; }
+.cue-settings .settings-footer { grid-column: 2; grid-row: 3; padding: 16px 28px; margin: 0; border-top: 1px solid #ffffff0b; }
+.cue-settings .settings-footer > span { font-size: 10px; letter-spacing: 0; color: #777; }
+.cue-settings .settings-footer > div { gap: 12px; }
+.cue-settings .ob-model-options { max-height: 280px; }
+.cue-settings .ob-meter { margin-top: 30px; }
+@media (hover: hover) and (pointer: fine) { .settings-nav button:hover { background: #ffffff07; color: #ddd; } }
+@media (prefers-reduced-motion: reduce) { .cue-settings * { scroll-behavior: auto; } }
