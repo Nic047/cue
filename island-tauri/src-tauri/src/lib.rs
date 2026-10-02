@@ -6,6 +6,7 @@ mod media_control;
 mod native_audio;
 mod onboarding;
 mod orchestrator_bridge;
+mod window_layout;
 use orchestrator_bridge::OrchestratorState;
 
 /// Frontend-Logs ins Terminal durchreichen (Webview-Console ist unsichtbar).
@@ -99,11 +100,11 @@ pub fn run() {
             orchestrator_bridge::run_task,
             orchestrator_bridge::open_export,
             orchestrator_bridge::kill_task,
-            orchestrator_bridge::get_notch_layout,
-            orchestrator_bridge::resize_window,
-            orchestrator_bridge::morph_window,
-            orchestrator_bridge::hide_window,
-            orchestrator_bridge::show_window,
+            window_layout::get_notch_layout,
+            window_layout::resize_window,
+            window_layout::morph_window,
+            window_layout::hide_window,
+            window_layout::show_window,
             orchestrator_bridge::answer_question,
             native_audio::start_audio_recording,
             native_audio::stop_audio_recording,
@@ -195,7 +196,7 @@ pub fn run() {
 
             // Use the same safe-area anchor for startup, resizing, and display changes.
             let width = window.outer_size()?.width as f64 / window.scale_factor()?;
-            orchestrator_bridge::pin_top_center(&window, width)?;
+            window_layout::pin_top_center(&window, width)?;
             let display_window = window.clone();
             window.on_window_event(move |event| {
                 if matches!(
@@ -205,7 +206,7 @@ pub fn run() {
                     if let (Ok(size), Ok(scale)) =
                         (display_window.outer_size(), display_window.scale_factor())
                     {
-                        let _ = orchestrator_bridge::pin_top_center(
+                        let _ = window_layout::pin_top_center(
                             &display_window,
                             size.width as f64 / scale,
                         );
@@ -227,7 +228,7 @@ pub fn run() {
                     let id = event.id.as_ref();
                     #[cfg(all(debug_assertions, target_os = "macos"))]
                     if id == "simulate-notch" {
-                        if let Err(error) = orchestrator_bridge::toggle_notch_preview(app) {
+                        if let Err(error) = window_layout::toggle_notch_preview(app) {
                             eprintln!("[cue] Notch preview: {error}");
                         }
                         return;
