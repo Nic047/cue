@@ -21,3 +21,7 @@ target/
 /island-tauri/src-tauri/resources/agent-runtime.previous/
 
 /landing/downloads/*.dmg
+
+# Internal acceptance notes stay local; the public release status is in README.md.
+/INTERN-ABNAHME-CHECKLISTE.md
+/ABNAHME-NACHWEISE.md

@@ -1,68 +1,74 @@
 # Cue
 
-Cue is an early macOS desktop assistant built around a compact pill in the MacBook notch. It connects AI tasks to browser and sandbox tools through Solari.
+**Say what you want done. Keep working.**
 
-This repository contains the Tauri app, its TypeScript orchestrator, and the landing page in `landing/`. Cue is an unsigned alpha; fresh-machine acceptance and signed distribution are still being completed. See [`INTERN-ABNAHME-CHECKLISTE.md`](INTERN-ABNAHME-CHECKLISTE.md) for current acceptance work.
+Cue is an open-source macOS assistant that lets you hand off browser and sandbox tasks to AI agents while you continue working. It lives in the menu bar and, on supported MacBook displays, can sit around the notch.
 
-## Development
+[Download Cue](https://trycue.lol/) · [Source code](https://github.com/Nic047/cue) · [Report a bug](https://github.com/Nic047/cue/issues)
 
-Requirements: macOS, Bun, Node.js, and the Rust toolchain required by Tauri 2.
+## Project status
 
-1. Clone this repository and install dependencies:
+Cue is an early alpha for evaluation. It currently supports Apple Silicon Macs and requires your own Solari, Vercel AI Gateway, and Groq API keys. The downloadable build is not notarized by Apple, and a clean-machine installation has not yet been fully verified. Expect rough edges; do not rely on Cue for important or time-sensitive work.
 
-   ```sh
-   bun install
-   cd island-tauri
-   bun install
-   ```
+## What it does
 
-2. Start the Tauri development app from `island-tauri`, setting the project directory to the repository root:
+- Start a task by voice or keyboard shortcut.
+- Run browser and sandbox work in parallel while Cue stays in the menu bar.
+- Review the result, task details, and recent chats in a compact panel.
 
-   ```sh
-   CUE_PROJECT_DIR=.. bun run tauri dev
-   ```
+Agent access depends on the tools and permissions you grant. Cue does not submit forms, make purchases, or change accounts as part of its current browser workflow.
 
-3. Add your Solari, Vercel AI Gateway, and Groq (voice transcription) credentials in Cue's onboarding. The app stores them in the macOS Keychain. The standalone orchestrator also reads `SOLARI_API_KEY`, `AI_GATEWAY_API_KEY`, and `GROQ_API_KEY` from its environment.
+## Install
 
-The landing page is static; open `landing/index.html` directly or serve the `landing/` directory with any local static web server.
+Download the Apple Silicon build from [trycue.lol](https://trycue.lol/), open the DMG, and drag Cue to Applications. On first launch, onboarding guides you through Microphone and Accessibility permissions, microphone selection, your shortcut, and provider keys.
 
-## Status
+## Develop
 
-Cue is a prototype. Browser and sandbox runs require valid provider credentials and network access. The current sidecar is Apple Silicon-only. The acceptance checklist tracks packaging, portability, and end-to-end verification; do not treat this repository as a stable release yet.
-
-## License
-
-Cue is licensed under the MIT License. See [`LICENSE`](LICENSE).
-
-## Build an Apple Silicon app
-
-Use an arm64 Node.js 22+ runtime, Bun, npm, and Rust on macOS. From `island-tauri`:
+Development requires macOS, Apple Silicon, Node.js 22 or later, Bun, and the Rust toolchain used by Tauri 2. Xcode Command Line Tools must be installed for native builds.
 
 ```sh
+bun install
+cd island-tauri
+bun install
+CUE_PROJECT_DIR=.. bun run tauri dev
+```
+
+Add keys through onboarding. For standalone orchestrator development, copy `.env.example` to `.env` and add `SOLARI_API_KEY`, `AI_GATEWAY_API_KEY`, and `GROQ_API_KEY`. Never commit real keys.
+
+The landing page lives in `landing/` and can be served with any static web server.
+
+## Build an unsigned app
+
+From the repository root, install the build-only DMG tools once, then build from `island-tauri/`:
+
+```sh
+python3 -m venv /private/tmp/cue-dmg-tools
+/private/tmp/cue-dmg-tools/bin/python -m pip install -r scripts/requirements-dmg.txt
+cd island-tauri
 bun run bundle:unsigned
 ```
 
-The build packages Node, the orchestrator, and its production dependencies. The installed app does not use `npx`, download a runtime, or require the repository. The app bundle is generated at `island-tauri/src-tauri/target/release/bundle/macos/Cue.app`. This ad hoc signed build is for local acceptance; signing/notarization and testing on another Mac remain release requirements.
+The app is created under `island-tauri/src-tauri/target/release/bundle/macos/`; the DMG is written to `landing/downloads/`. These Python packages are used only to lay out the installer and are not shipped with Cue. The app is ad hoc signed but not notarized, and standard Gatekeeper installation is not verified. Signing and notarizing the complete app—including its embedded Node runtime and sidecar—are still required for a smooth public release.
 
-Allow Microphone (voice input) and Accessibility (global shortcut) in System Settings when prompted. Keys stay in the macOS Keychain. Get credentials from [Solari](https://console.getsolari.com), [Vercel AI Gateway](https://vercel.com/dashboard/ai-gateway), and [Groq](https://console.groq.com/keys). Browser media control additionally requires the browser’s “Allow JavaScript from Apple Events” setting; agent execution does not depend on that permission.
+## Providers and privacy
 
-### Reproducible acceptance demos
+Cue stores app credentials in the macOS Keychain. Voice audio is sent to Groq for transcription; the resulting prompt and task context are processed by the configured agent and model providers. A task may also send relevant page content to the tools it uses. Review the policies of the providers you configure and avoid using sensitive data in this alpha.
 
-- Browser: “Open https://example.com, report its heading and main paragraph, and include the source link.” Expect **Example Domain** and the actual page text.
-- Sandbox file: “Use Python to calculate the first 20 prime numbers, save them as primes.csv, export the file to my Mac, and list the numbers.” Expect 20 values from 2 through 71 and a file link. Click it to reveal the exported CSV in Finder.
-- Preview: “Create a simple HTML page saying Hello Cue, serve it on port 3000, expose the port, and include the preview URL.” Open the URL in a second browser after the answer; test again before the displayed expiration and after expiration.
-- Failure: “Run a sandbox shell command that exits with code 7. Do not repair it; report the failure.” Expect a failed task rather than a green success.
+## Repository layout
 
-Exported files persist in `~/Downloads/Cue` until you delete them. Sandbox tasks without previews are destroyed when finished. Preview sessions use a server-enforced kill timeout of ten minutes, renewed at task completion; the answer includes their expiration. Closing the app does not extend the timeout. Cancelling an active task kills its sandbox. Remote expiration/availability still needs the real-provider acceptance test.
+- `island-tauri/` — macOS app and UI
+- `orchestrator.ts`, `browser-tools.ts`, `sandbox-tools.ts` — task orchestration and agent tools
+- `scripts/` — packaging and local checks
+- `landing/` — download site source and download worker
 
-Local checks and remaining acceptance work: [`ABNAHME-NACHWEISE.md`](ABNAHME-NACHWEISE.md).
+## Contributing
 
-## Website download artifact
+See [CONTRIBUTING.md](CONTRIBUTING.md) for setup and contribution guidance. Please include the checks you ran and any limitations in pull requests.
 
-For the Finder layout, install the build-only tools once: `python3 -m venv /private/tmp/cue-dmg-tools && /private/tmp/cue-dmg-tools/bin/pip install -r scripts/requirements-dmg.txt` (or set `CUE_DMG_PYTHON` to an environment with those packages). These tools are not shipped inside Cue.
+## Security
 
-From `island-tauri`, run `bun run bundle:unsigned` to produce the Apple Silicon `.app` and `.dmg`. The DMG is in `../landing/downloads/`; use that file for a download link rather than the source checkout. No website deployment is performed by this command.
+Please report suspected vulnerabilities privately. See [SECURITY.md](SECURITY.md); do not post credentials or exploitable details in public issues.
 
-This command creates an **ad hoc signed, unnotarized alpha**. It compiles a native sidecar, signs the embedded Node runtime and sidecar before sealing the app, verifies the signatures, and verifies the DMG checksum. Label the download accordingly; standard Gatekeeper installation is not verified. For a signed release, use `bun run tauri build --bundles app,dmg` with your Developer ID setup and notarize the complete bundle, including its embedded Node runtime. Keep the existing app identifier stable across updates so preferences and permissions continue to refer to Cue.
+## License
 
-Only one Cue process can own the menu bar and shortcut at a time. Quit the development app before opening the bundled app. Agent-runtime builds are staged before replacing the previous complete runtime; failed builds leave that runtime intact. Node’s license is included in the runtime resources.
+Cue is licensed under the [MIT License](LICENSE).
