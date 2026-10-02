@@ -1,3 +1,5 @@
+export const HOLD_TO_PEEK_MS = 1500;
+
 export const providers = [
   {
     id: "solari",

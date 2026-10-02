@@ -1,0 +1,17 @@
+name: Check
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  check:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: bun install --cwd island-tauri --frozen-lockfile
+      - run: bun run check
+      - run: cargo fmt --manifest-path island-tauri/src-tauri/Cargo.toml --check
+      - run: cargo check --manifest-path island-tauri/src-tauri/Cargo.toml

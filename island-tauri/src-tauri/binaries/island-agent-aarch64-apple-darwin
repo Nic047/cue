@@ -1,8 +1,7 @@
 #!/bin/sh
-# Sidecar wrapper for Cue.
-#
-# WICHTIG: Bewusst tsx/node statt bun-compile – der Orchestrator haengt
-# unter der Bun-Runtime beim Solari-WebSocket (gelernt: immer tsx nutzen).
-# stdout = JSONL-Events, stderr = menschliche Logs.
-cd "${CUE_PROJECT_DIR:-$(pwd)}"
-exec npx --yes tsx orchestrator.ts "$@"
+set -eu
+if [ -n "${CUE_AGENT_RUNTIME:-}" ]; then
+  exec "$CUE_AGENT_RUNTIME/node" "$CUE_AGENT_RUNTIME/orchestrator.mjs" "$@"
+fi
+cd "${CUE_PROJECT_DIR:?Cue development requires CUE_PROJECT_DIR}"
+exec node --import tsx orchestrator.ts "$@"

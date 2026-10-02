@@ -14,14 +14,43 @@ fn log_line(line: String) {
     println!("{}", line);
 }
 
+// Keep the advisory lock open for the app lifetime; macOS releases it after a crash too.
+#[cfg(target_os = "macos")]
+fn acquire_instance_lock(app: &tauri::AppHandle) -> std::io::Result<Option<std::fs::File>> {
+    use std::os::fd::AsRawFd;
+    let directory = app.path().app_data_dir().map_err(std::io::Error::other)?;
+    std::fs::create_dir_all(&directory)?;
+    let lock = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .open(directory.join("instance.lock"))?;
+    if unsafe { libc::flock(lock.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) } == 0 {
+        return Ok(Some(lock));
+    }
+    let error = std::io::Error::last_os_error();
+    if error.kind() == std::io::ErrorKind::WouldBlock {
+        Ok(None)
+    } else {
+        Err(error)
+    }
+}
+
 fn build_tray_menu(app: &tauri::AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
     let menu = Menu::new(app)?;
     let recent = MenuItem::with_id(app, "recent-chats", "Recent Chats…", true, None::<&str>)?;
     menu.append(&recent)?;
-    menu.append(&MenuItem::with_id(app, "settings", "Settings…", true, None::<&str>)?)?;
+    menu.append(&MenuItem::with_id(
+        app,
+        "settings",
+        "Settings…",
+        true,
+        None::<&str>,
+    )?)?;
     menu.append(&PredefinedMenuItem::separator(app)?)?;
-    let toggle = MenuItem::with_id(app, "toggle", "Toggle Island", true, None::<&str>)?;
-    let quit = MenuItem::with_id(app, "quit", "Quit Island", true, None::<&str>)?;
+    let toggle = MenuItem::with_id(app, "toggle", "Toggle Cue", true, None::<&str>)?;
+    let quit = MenuItem::with_id(app, "quit", "Quit Cue", true, None::<&str>)?;
     menu.append(&MenuItem::with_id(
         app,
         "show-onboarding",
@@ -50,6 +79,8 @@ pub fn run() {
         .plugin(tauri_nspanel::init())
         .invoke_handler(tauri::generate_handler![
             onboarding::onboarding_status,
+            onboarding::dismiss_setup,
+            onboarding::restart_for_permissions,
             onboarding::get_customization,
             global_shortcut::capture_shortcut,
             onboarding::save_customization,
@@ -66,6 +97,7 @@ pub fn run() {
             native_audio::stop_mic_check,
             log_line,
             orchestrator_bridge::run_task,
+            orchestrator_bridge::open_export,
             orchestrator_bridge::kill_task,
             orchestrator_bridge::get_notch_layout,
             orchestrator_bridge::resize_window,
@@ -80,6 +112,16 @@ pub fn run() {
             media_control::resume_media_after_listening,
         ])
         .setup(|app| {
+            #[cfg(target_os = "macos")]
+            match acquire_instance_lock(app.handle())? {
+                Some(lock) => {
+                    app.manage(lock);
+                }
+                None => {
+                    app.handle().exit(0);
+                    return Ok(());
+                }
+            }
             // Menueleisten-App: kein Dock-Icon (Agent). Die Pill laeuft
             // als NSPanel weiter und kuemmert sich nicht um Aktivierung.
             #[cfg(target_os = "macos")]
@@ -91,7 +133,10 @@ pub fn run() {
                 child: std::sync::Mutex::new(None),
                 stdin: std::sync::Mutex::new(None),
             });
-            let prefs = onboarding::load_preferences(app.handle());
+            let mut prefs = onboarding::load_preferences(app.handle());
+            if !cfg!(debug_assertions) && !prefs.installed_setup_complete {
+                prefs.complete = false;
+            }
             global_shortcut::set_shortcut(&prefs.shortcut);
             let complete = prefs.complete && onboarding::has_keys();
             app.manage(native_audio::NativeAudio::with_device(
@@ -176,7 +221,7 @@ pub fn run() {
             tauri::tray::TrayIconBuilder::with_id("main")
                 .icon(icon)
                 .icon_as_template(true)
-                .tooltip("Island")
+                .tooltip("Cue")
                 .menu(&menu)
                 .on_menu_event(|app, event| {
                     let id = event.id.as_ref();
@@ -241,6 +286,26 @@ pub fn run() {
             }
             Ok(())
         })
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app, event| {
+            #[cfg(target_os = "macos")]
+            if matches!(event, tauri::RunEvent::Ready) {
+                use objc2::{AllocAnyThread, MainThreadMarker};
+                use objc2_app_kit::{NSApplication, NSImage};
+                use objc2_foundation::NSData;
+                if let Some(mtm) = MainThreadMarker::new() {
+                    let data = NSData::with_bytes(include_bytes!("../icons/icon.icns"));
+                    if let Some(icon) = NSImage::initWithData(NSImage::alloc(), &data) {
+                        unsafe {
+                            NSApplication::sharedApplication(mtm)
+                                .setApplicationIconImage(Some(&icon));
+                        }
+                    }
+                }
+            }
+            if matches!(event, tauri::RunEvent::Reopen { .. }) {
+                onboarding::reopen_setup(app);
+            }
+        });
 }

@@ -42,6 +42,7 @@ extern "C" {
         user_info: *mut c_void,
     ) -> *mut c_void; // CFMachPortRef
     fn CGEventTapEnable(tap: *mut c_void, enable: bool);
+    fn CGEventTapIsEnabled(tap: *mut c_void) -> bool;
     fn CGEventGetFlags(event: *mut c_void) -> u64;
     fn CGEventCreateCopy(event: *mut c_void) -> *mut c_void;
     fn CGEventGetIntegerValueField(event: *mut c_void, field: u64) -> i64;
@@ -244,6 +245,7 @@ static OPTION_HELD: AtomicBool = AtomicBool::new(false);
 /// saemtliche Shortcuts bis zum App-Neustart tot.
 static ENABLED: AtomicBool = AtomicBool::new(false);
 static INSTALLING: AtomicBool = AtomicBool::new(false);
+static PERMISSION_FAILURE_REPORTED: AtomicBool = AtomicBool::new(false);
 pub fn set_enabled(enabled: bool) {
     ENABLED.store(enabled, Ordering::SeqCst);
 }
@@ -251,7 +253,8 @@ pub fn is_enabled() -> bool {
     ENABLED.load(Ordering::SeqCst)
 }
 pub fn is_ready() -> bool {
-    TAP_HANDLE.load(Ordering::SeqCst) != 0
+    let tap = TAP_HANDLE.load(Ordering::SeqCst) as *mut c_void;
+    !tap.is_null() && unsafe { CGEventTapIsEnabled(tap) }
 }
 
 static TAP_HANDLE: AtomicUsize = AtomicUsize::new(0);
@@ -403,7 +406,7 @@ unsafe extern "C" fn on_flags_changed(
 
 pub fn install(app: AppHandle) {
     let _ = APP_HANDLE.set(app);
-    if is_ready() || INSTALLING.swap(true, Ordering::SeqCst) {
+    if TAP_HANDLE.load(Ordering::SeqCst) != 0 || INSTALLING.swap(true, Ordering::SeqCst) {
         return;
     }
     std::thread::spawn(|| unsafe {
@@ -419,9 +422,9 @@ pub fn install(app: AppHandle) {
         );
         if tap.is_null() {
             INSTALLING.store(false, Ordering::SeqCst);
-            eprintln!(
-                "[island] CGEventTapCreate fehlgeschlagen: macOS verweigert die Eingabeueberwachung. Systemeinstellungen > Datenschutz & Sicherheit > Bedienungshilfen > Cue aktivieren."
-            );
+            if !PERMISSION_FAILURE_REPORTED.swap(true, Ordering::SeqCst) {
+                eprintln!("[cue] Shortcut access denied. Enable Cue in System Settings > Privacy & Security > Accessibility.");
+            }
             return;
         }
         CGEventTapEnable(tap, true);

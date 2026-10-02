@@ -5,7 +5,7 @@ import { playSound, primeAudioOnGesture } from "@/lib/sound-engine";
 import { play as playCue } from "cuelume";
 import { click002Sound } from "@/lib/click-002";
 
-export const HOLD_TO_PEEK_MS = 1500;
+export { HOLD_TO_PEEK_MS } from "./setup-options";
 let onboardingWatching = false;
 const SILENCE_PEAK_THRESHOLD = 0.01;
 const RECENT_CHATS_KEY = "cue.recent-chats";
@@ -368,7 +368,7 @@ function ensureWired() {
       });
     } else if (ev.type === "task_start") {
       const msg = ev.message ?? "";
-      const task = taskForMessage(msg);
+      const task = ev.taskId ? store.tasks.find((t) => t.id === ev.taskId) : taskForMessage(msg);
       if (task) {
         set({
           tasks: store.tasks.map((t) =>
@@ -399,9 +399,9 @@ function ensureWired() {
       // Fallback: freier Text-Step (LLM-Gedanke etc.).
       const msg = ev.message ?? "";
       const raw = cleanStep(msg);
-      const ok = !raw.includes("fehlgeschlagen");
+      const ok = ev.ok !== false && !raw.includes("fehlgeschlagen");
       const step: AgentStep = { label: raw, ok };
-      const task = taskForMessage(msg);
+      const task = ev.taskId ? store.tasks.find((t) => t.id === ev.taskId) : taskForMessage(msg);
       if (task) {
         set({
           tasks: store.tasks.map((t) =>
@@ -413,7 +413,7 @@ function ensureWired() {
         set({ allSteps: [...store.allSteps, step] });
       }
     } else if (ev.type === "task_done") {
-      const task = store.tasks.find((t) => t.title === ev.title);
+      const task = store.tasks.find((t) => ev.taskId ? t.id === ev.taskId : t.title === ev.title);
       const step: AgentStep = {
         label: `${ev.ok ? "OK" : "FEHLER"} — ${ev.title ?? ""} (${ev.steps ?? 0} steps)`,
         ok: Boolean(ev.ok),
@@ -462,11 +462,17 @@ function ensureWired() {
       } catch {
         /* ignore */
       }
+    } else if (ev.type === "agent_error") {
+      set({
+        phase: "error",
+        error: String(ev.message ?? "Cue agent exited unexpectedly."),
+      });
     }
   });
 
   listen("orchestrator-done", () => {
     // Falls kein answer-Event kam (Prozess tot / gekillt): trotzdem abschliessen.
+    if (store.phase === "error") return;
     set({ phase: store.answer ? "done" : "idle" });
     if (!store.answer) reset();
   });

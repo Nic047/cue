@@ -4,18 +4,18 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "tsx orchestrator.ts"
+    "start": "tsx orchestrator.ts",
+    "check": "node --import tsx scripts/check-sandbox.ts && tsc --noEmit --module nodenext --moduleResolution nodenext --target es2022 --skipLibCheck orchestrator.ts sandbox-tools.ts browser-tools.ts && cd island-tauri && bun run build"
   },
   "dependencies": {
-    "@ai-sdk/groq": "^4.0.46",
     "@solarisdk/browser": "^0.1.3",
     "@solarisdk/sandbox": "^0.1.3",
     "ai": "^7.0.107",
     "dotenv": "^16.4.5",
-    "groq-sdk": "^1.6.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "esbuild": "^0.28.2",
     "tsx": "^4.19.0",
     "typescript": "^5.6.0",
     "@types/node": "^22.0.0"

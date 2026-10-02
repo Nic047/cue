@@ -16,6 +16,8 @@ pub struct Preferences {
     #[serde(default)]
     pub complete: bool,
     #[serde(default)]
+    pub installed_setup_complete: bool,
+    #[serde(default)]
     pub microphone: Option<String>,
     #[serde(default)]
     pub shortcut: String,
@@ -170,12 +172,21 @@ fn microphone_permission() -> String {
     .into()
 }
 
+// Check both Accessibility and the CoreGraphics event permission used by our shortcut.
+#[link(name = "CoreGraphics", kind = "framework")]
+extern "C" {
+    fn CGPreflightPostEventAccess() -> bool;
+}
+fn accessibility_granted() -> bool {
+    let trusted = unsafe { AXIsProcessTrusted() || CGPreflightPostEventAccess() };
+    trusted || super::global_shortcut::is_ready()
+}
+
 #[tauri::command]
 pub fn onboarding_status(app: AppHandle, state: State<'_, OnboardingState>) -> SetupStatus {
-    let accessibility = unsafe { AXIsProcessTrusted() };
-    if accessibility {
-        super::global_shortcut::install(app);
-    }
+    // Retry the actual event tap: macOS can cache a negative trust check until restart.
+    super::global_shortcut::install(app);
+    let accessibility = accessibility_granted();
     let prefs = state.0.lock().unwrap();
     SetupStatus {
         complete: prefs.complete,
@@ -204,6 +215,12 @@ pub async fn request_onboarding_permission(permission: String) -> Result<(), Str
             Ok(())
         }).await.map_err(|e| e.to_string())?;
     }
+    if !matches!(
+        permission.as_str(),
+        "microphone" | "accessibility" | "sound"
+    ) {
+        return Err("Unknown permission.".into());
+    }
     if permission == "accessibility" {
         unsafe {
             let options = CFDictionaryCreate(
@@ -230,10 +247,9 @@ pub async fn request_onboarding_permission(permission: String) -> Result<(), Str
         "sound" => "x-apple.systempreferences:com.apple.preference.sound?input",
         _ => return Err("Unknown permission.".into()),
     };
-    Command::new("/usr/bin/open")
-        .arg(pane)
-        .spawn()
-        .map_err(|e| e.to_string())?;
+    if let Err(error) = Command::new("/usr/bin/open").arg(pane).spawn() {
+        return Err(error.to_string());
+    }
     Ok(())
 }
 
@@ -347,7 +363,8 @@ pub fn show_full(app: &AppHandle) -> Result<(), String> {
     let _ = app.emit_to("main", "onboarding-watch", false);
     let _ = app.emit_to("main", "onboarding-start-over", ());
     if let Some(win) = app.get_webview_window("onboarding") {
-        win.set_size(tauri::LogicalSize::new(700., 740.)).map_err(|e| e.to_string())?;
+        win.set_size(tauri::LogicalSize::new(700., 740.))
+            .map_err(|e| e.to_string())?;
         win.center().map_err(|e| e.to_string())?;
         let _ = win.emit("onboarding-start-over", ());
         return present_setup_window(&win);
@@ -358,7 +375,8 @@ pub fn show_full(app: &AppHandle) -> Result<(), String> {
 pub fn open_settings(app: &AppHandle) -> Result<(), String> {
     // The demo may otherwise bring setup back in front when a result closes.
     if let Some(win) = app.get_webview_window("onboarding") {
-        win.emit("onboarding-suspended", ()).map_err(|e| e.to_string())?;
+        win.emit("onboarding-suspended", ())
+            .map_err(|e| e.to_string())?;
         win.hide().map_err(|e| e.to_string())?;
     }
     let _ = app.emit_to("main", "onboarding-watch", false);
@@ -373,10 +391,20 @@ fn open_window(app: &AppHandle, keys_only: bool, settings: bool) -> Result<(), S
     let label = if settings { "settings" } else { "onboarding" };
     let width = if settings { 780. } else { 700. };
     if let Some(win) = app.get_webview_window(label) {
-        win.set_size(tauri::LogicalSize::new(width, 740.)).map_err(|e| e.to_string())?;
-        win.center().map_err(|e| e.to_string())?;
-        win.emit(if settings { "settings-open" } else if keys_only { "keys-open" } else { "onboarding-resumed" }, ())
+        win.set_size(tauri::LogicalSize::new(width, 740.))
             .map_err(|e| e.to_string())?;
+        win.center().map_err(|e| e.to_string())?;
+        win.emit(
+            if settings {
+                "settings-open"
+            } else if keys_only {
+                "keys-open"
+            } else {
+                "onboarding-resumed"
+            },
+            (),
+        )
+        .map_err(|e| e.to_string())?;
         return present_setup_window(&win);
     }
     let url = if settings {
@@ -394,14 +422,22 @@ fn open_window(app: &AppHandle, keys_only: bool, settings: bool) -> Result<(), S
         .decorations(false)
         .transparent(true)
         .shadow(false)
-        .always_on_top(true)
+        .always_on_top(false)
+        .minimizable(true)
         .visible(false)
         .background_color(tauri::window::Color(0, 0, 0, 0))
         .build()
         .map_err(|e| e.to_string())?;
     let app = app.clone();
+    let setup_window = win.clone();
     win.on_window_event(move |event| {
+        if let tauri::WindowEvent::Focused(focused) = event {
+            if *focused {
+                let _ = setup_window.emit("setup-focus", ());
+            }
+        }
         if matches!(event, tauri::WindowEvent::Destroyed) {
+            let _ = app.set_activation_policy(tauri::ActivationPolicy::Accessory);
             let _ = super::global_shortcut::capture_shortcut(false);
             super::native_audio::cancel_check(&app);
             let complete = app.state::<OnboardingState>().0.lock().unwrap().complete;
@@ -414,52 +450,58 @@ fn open_window(app: &AppHandle, keys_only: bool, settings: bool) -> Result<(), S
     present_setup_window(&win)
 }
 
-fn present_setup_window(win: &tauri::WebviewWindow) -> Result<(), String> {
-    #[cfg(target_os = "macos")]
-    {
-        let window = win.clone();
-        return win.app_handle().run_on_main_thread(move || {
-            use tauri_nspanel::{ManagerExt, WebviewWindowExt};
-            #[allow(deprecated)]
-            use tauri_nspanel::cocoa::appkit::NSWindowCollectionBehavior;
-            let panel = match window.app_handle().get_webview_panel(window.label()) {
-                Ok(panel) => panel,
-                Err(_) => match window.to_panel() {
-                    Ok(panel) => panel,
-                    Err(error) => {
-                        eprintln!("[cue] Cannot present {}: {error}", window.label());
-                        return;
-                    }
-                },
-            };
-            panel.set_floating_panel(true);
-            panel.set_hides_on_deactivate(false);
-            #[allow(deprecated)]
-            panel.set_collection_behaviour(
-                NSWindowCollectionBehavior::NSWindowCollectionBehaviorCanJoinAllSpaces
-                    | NSWindowCollectionBehavior::NSWindowCollectionBehaviorFullScreenAuxiliary,
-            );
-            // Above Cue (1000) and the simulated camera housing (1001).
-            panel.set_level(1002);
-            panel.show();
-            if let Err(error) = window.set_focus() {
-                eprintln!("[cue] Cannot focus {}: {error}", window.label());
+pub fn reopen_setup(app: &AppHandle) {
+    for label in ["settings", "onboarding"] {
+        if let Some(win) = app.get_webview_window(label) {
+            if win.is_visible().unwrap_or(false) || win.is_minimized().unwrap_or(false) {
+                let _ = present_setup_window(&win);
+                break;
             }
-            panel.order_front_regardless();
-        }).map_err(|e| e.to_string());
+        }
     }
-    #[cfg(not(target_os = "macos"))]
+}
+
+fn present_setup_window(win: &tauri::WebviewWindow) -> Result<(), String> {
+    // Setup is a normal app window, so macOS permission dialogs can cover it.
+    win.app_handle()
+        .set_activation_policy(tauri::ActivationPolicy::Regular)
+        .map_err(|e| e.to_string())?;
+    win.unminimize().map_err(|e| e.to_string())?;
+    win.show().map_err(|e| e.to_string())?;
+    win.set_focus().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn restart_for_permissions(app: AppHandle) -> Result<(), String> {
+    use std::os::fd::AsRawFd;
+    if app
+        .state::<super::OrchestratorState>()
+        .child
+        .lock()
+        .unwrap()
+        .is_some()
     {
-        win.show().map_err(|e| e.to_string())?;
-        win.set_focus().map_err(|e| e.to_string())
+        return Err("Finish or cancel your running task before restarting Cue.".into());
     }
+    // Tauri starts the replacement before exiting; release our instance lock first.
+    let lock = app.state::<std::fs::File>();
+    if unsafe { libc::flock(lock.as_raw_fd(), libc::LOCK_UN) } != 0 {
+        return Err(std::io::Error::last_os_error().to_string());
+    }
+    app.request_restart();
+    Ok(())
+}
+
+#[tauri::command]
+pub fn dismiss_setup(app: AppHandle, window: tauri::WebviewWindow) -> Result<(), String> {
+    window.hide().map_err(|e| e.to_string())?;
+    app.set_activation_policy(tauri::ActivationPolicy::Accessory)
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 pub fn set_onboarding_ready(app: AppHandle, ready: bool) -> Result<(), String> {
-    if ready
-        && (!has_keys() || microphone_permission() != "granted" || !unsafe { AXIsProcessTrusted() })
-    {
+    if ready && (!has_keys() || microphone_permission() != "granted" || !accessibility_granted()) {
         return Err("Grant permissions and validate all three keys first.".into());
     }
     super::global_shortcut::set_enabled(ready);
@@ -473,13 +515,14 @@ pub fn set_onboarding_ready(app: AppHandle, ready: bool) -> Result<(), String> {
 pub fn finish_onboarding(app: AppHandle, state: State<'_, OnboardingState>) -> Result<(), String> {
     if !has_keys()
         || microphone_permission() != "granted"
-        || !unsafe { AXIsProcessTrusted() }
+        || !accessibility_granted()
         || !super::global_shortcut::is_ready()
     {
         return Err("Finish permissions and keys before closing setup.".into());
     }
     let mut prefs = state.0.lock().unwrap();
     prefs.complete = true;
+    prefs.installed_setup_complete |= !cfg!(debug_assertions);
     if let Err(error) = save_preferences(&app, &prefs) {
         prefs.complete = false;
         return Err(error);

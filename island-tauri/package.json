@@ -1,17 +1,18 @@
 {
   "name": "tauri-app",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.2",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "bundle:unsigned": "tauri build --bundles app --no-sign && node ../scripts/package-macos.mjs"
   },
   "dependencies": {
     "@radix-ui/react-context-menu": "^2.3.7",
-    "@tauri-apps/api": "^2",
+    "@tauri-apps/api": "~2.11.0",
     "@tauri-apps/plugin-opener": "^2",
     "clsx": "^2.1.1",
     "cuelume": "^0.2.2",

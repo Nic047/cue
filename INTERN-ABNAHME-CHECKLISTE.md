@@ -1,16 +1,18 @@
 # Abnahme-Checkliste: Solari-Projekt
 
+Lokaler Implementierungs- und Prüfstand: [ABNAHME-NACHWEISE.md](ABNAHME-NACHWEISE.md). Frisch-Mac- und Cloud-Abnahme sind noch offen.
+
 **Ziel:** Die App lässt sich auf einem frischen Mac starten, erledigt Browser- und Sandbox-Aufgaben zuverlässig und liefert ein überprüfbares Ergebnis. Hake einen Punkt erst ab, wenn du den Nachweis dokumentiert hast.
 
 ## Die vier wichtigsten Aufgaben
 
 ### 1. App auf einem fremden Mac starten können
 
-- [ ] Entferne feste Entwicklerpfade aus Sidecar und Rust-Bridge. Die App darf weder `~/Downloads/files` noch ein persönliches `npx`-Verzeichnis voraussetzen.
-- [ ] Führe die doppelten `bundle`-Einträge in `tauri.conf.json` zusammen und stelle sicher, dass der Build den Sidecar mitliefert.
+- [x] Entferne feste Entwicklerpfade aus Sidecar und Rust-Bridge. Die App darf weder `~/Downloads/files` noch ein persönliches `npx`-Verzeichnis voraussetzen.
+- [x] Führe die doppelten `bundle`-Einträge in `tauri.conf.json` zusammen und stelle sicher, dass der Build den Sidecar mitliefert.
 - [ ] Erzeuge und installiere den App-Build auf einem unterstützten Mac, auf dem das Repository und `node_modules` nicht vorhanden sind.
 - [ ] Starte die installierte App und erreiche das Onboarding. Dokumentiere Mac-Modell, macOS-Version und genaue Build- und Installationsschritte.
-- [ ] Ersetze die sichtbaren Tauri-Platzhalter und schreibe eine kurze README, mit der eine andere Person die App starten und die benötigten Keys einrichten kann.
+- [x] Ersetze die sichtbaren Tauri-Platzhalter und schreibe eine kurze README, mit der eine andere Person die App starten und die benötigten Keys einrichten kann.
 
 **Fertig, wenn:** die installierte App ohne Quellcode-Checkout und ohne persönliche Pfade startet.
 
@@ -25,9 +27,9 @@
 
 ### 3. Erfolge und Fehler korrekt anzeigen
 
-- [ ] Gib Befehle mit Exit-Code ungleich null als Fehler zurück. `run_command` und `run_shell` melden derzeit auch bei einem fehlgeschlagenen Befehl Erfolg.
-- [ ] Stelle sicher, dass Tool-Ergebnis, Fortschritts-Event und UI denselben Erfolg oder Fehler anzeigen. Insbesondere darf ein fehlgeschlagener Paketinstallationsversuch kein Erfolgs-Event erzeugen.
-- [ ] Markiere eine Aufgabe nicht allein deshalb als erfolgreich, weil das Modell irgendeinen Text zurückgegeben hat.
+- [x] Gib Befehle mit Exit-Code ungleich null als Fehler zurück. `run_command` und `run_shell` melden derzeit auch bei einem fehlgeschlagenen Befehl Erfolg.
+- [x] Stelle sicher, dass Tool-Ergebnis, Fortschritts-Event und UI denselben Erfolg oder Fehler anzeigen. Insbesondere darf ein fehlgeschlagener Paketinstallationsversuch kein Erfolgs-Event erzeugen.
+- [x] Markiere eine Aufgabe nicht allein deshalb als erfolgreich, weil das Modell irgendeinen Text zurückgegeben hat.
 - [ ] Verbinde Start-, Fortschritts- und Abschlussmeldungen über eine stabile Task-ID. Zeige jeden Task direkt nach seinem Abschluss als beendet an.
 - [ ] Prüfe einen erfolgreichen Befehl, einen fehlschlagenden Befehl, einen Agent-Fehler und zwei parallel laufende Aufgaben.
 

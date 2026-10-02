@@ -44,14 +44,14 @@ function result(ok: boolean, data: Record<string, unknown> = {}) {
 }
 
 export function buildBrowserTools(ctx: ToolContext) {
-  async function run<T>(
+  async function run<T extends { ok: boolean }>(
     name: string,
     fn: () => Promise<T>,
     target?: string,
   ): Promise<T> {
     try {
       const value = await withTimeout(fn(), name);
-      ctx.hooks?.onToolDone?.(name, true, target);
+      ctx.hooks?.onToolDone?.(name, value.ok, target);
       return value;
     } catch (err) {
       ctx.hooks?.onToolDone?.(name, false, target);
@@ -189,6 +189,7 @@ export function buildBrowserTools(ctx: ToolContext) {
             );
           const slice = fullText.slice(offset, offset + maxChars);
           return {
+            ok: true,
             url: ctx.page.url(),
             text: slice,
             totalLength: fullText.length,
@@ -244,7 +245,7 @@ export function buildBrowserTools(ctx: ToolContext) {
             if (pressEnter) await locator.press("Enter");
             return { ok: true };
           },
-          text,
+          selector,
         ).catch((err) => result(false, { error: String(err) })),
     }),
 
@@ -262,7 +263,7 @@ export function buildBrowserTools(ctx: ToolContext) {
               type: "jpeg",
               quality: 70,
             });
-            return { image: buf.toString("base64"), mediaType: "image/jpeg" };
+            return { ok: true, image: buf.toString("base64"), mediaType: "image/jpeg" };
           },
           fullPage ? "fullPage" : "viewport",
         ).catch((err) => result(false, { error: String(err) })),

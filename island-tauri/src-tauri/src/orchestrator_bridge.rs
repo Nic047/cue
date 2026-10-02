@@ -1,5 +1,5 @@
 //! Sidecar-Bridge: started den island-agent (Orchestrator als compiled
-//! Bun-Binary) und streamed seine JSONL-Events als Tauri-Events ins
+//! Node-Runtime) und streamed seine JSONL-Events als Tauri-Events ins
 //! Frontend. stdout = reine JSONL-Events, stderr = menschliche Logs.
 
 use std::io::{BufRead, BufReader, Write};
@@ -29,27 +29,37 @@ pub fn run_task(app: AppHandle, task: String) -> Result<(), String> {
     // Neue Generation: alte Reader-Threads (falls noch am Leben) verstummen.
     let gen = RUN_GEN.fetch_add(1, Ordering::SeqCst) + 1;
 
-    let project_dir = std::env::var_os("CUE_PROJECT_DIR")
-        .map(std::path::PathBuf::from)
-        .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
-    // Sidecar-Binary: Tauri loest den Target-Tripler-Suffix auf
-    // (island-agent-aarch64-apple-darwin).
-    let sidecar = app
-        .path()
-        .resource_dir()
-        .map_err(|e| format!("resource_dir fehlgeschlagen: {e}"))?
-        .join(format!("binaries/island-agent-{}", std::env::consts::ARCH));
-    let sidecar = if sidecar.exists() {
-        sidecar
+    let resources = app.path().resource_dir().map_err(|e| e.to_string())?;
+    let project_dir = if cfg!(debug_assertions) {
+        std::env::var_os("CUE_PROJECT_DIR")
+            .map(std::path::PathBuf::from)
+            .unwrap_or_else(|| {
+                std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                    .parent()
+                    .unwrap()
+                    .parent()
+                    .unwrap()
+                    .to_path_buf()
+            })
     } else {
-        // Dev-Fallback: direkt aus dem Quellverzeichnis.
-        std::env::current_dir()
-            .expect("cwd")
+        resources.clone()
+    };
+    let project_dir = project_dir
+        .canonicalize()
+        .map_err(|e| format!("Agent working directory unavailable: {e}"))?;
+    let sidecar = if cfg!(debug_assertions) {
+        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("binaries")
             .join(format!(
                 "island-agent-{}-apple-darwin",
                 std::env::consts::ARCH
             ))
+    } else {
+        std::env::current_exe()
+            .map_err(|e| e.to_string())?
+            .parent()
+            .ok_or("App executable has no parent directory")?
+            .join("island-agent")
     };
 
     eprintln!(
@@ -59,7 +69,12 @@ pub fn run_task(app: AppHandle, task: String) -> Result<(), String> {
     );
 
     let mut command = Command::new(&sidecar);
-    command.env("CUE_PROJECT_DIR", &project_dir);
+    if cfg!(debug_assertions) {
+        command.env("CUE_PROJECT_DIR", &project_dir);
+    } else {
+        command.env_remove("CUE_PROJECT_DIR");
+        command.env("CUE_AGENT_RUNTIME", resources.join("agent-runtime"));
+    }
     super::onboarding::apply_credentials(&mut command)?;
     let prefs = super::onboarding::load_preferences(&app);
     if !prefs.agent_model.is_empty() {
@@ -115,14 +130,34 @@ pub fn run_task(app: AppHandle, task: String) -> Result<(), String> {
             return;
         }
         // Stream zu => Prozess fertig. Aufräumen.
+        let mut exit_error = None;
         if let Some(state) = app.try_state::<OrchestratorState>() {
             let mut guard = state.child.lock().unwrap();
             if let Some(c) = guard.as_mut() {
-                let _ = c.wait();
+                match c.wait() {
+                    Ok(status) if !status.success() => {
+                        exit_error = Some(format!(
+                            "Cue agent exited unexpectedly{}.",
+                            status
+                                .code()
+                                .map(|code| format!(" with code {code}"))
+                                .unwrap_or_default()
+                        ));
+                    }
+                    Err(error) => {
+                        exit_error = Some(format!("Cue agent status unavailable: {error}"))
+                    }
+                    _ => {}
+                }
             }
             *guard = None;
             *state.stdin.lock().unwrap() = None;
             global_shortcut::set_task_active(false);
+        }
+        if let Some(message) = exit_error {
+            let event =
+                serde_json::json!({ "type": "agent_error", "message": message }).to_string();
+            let _ = app.emit("orchestrator-event", event);
         }
         let _ = app.emit("orchestrator-done", ());
     });
@@ -650,8 +685,35 @@ pub fn morph_window(app: AppHandle, width: f64, height: f64) -> Result<(), Strin
     Ok(())
 }
 
-fn dirs_home() -> std::path::PathBuf {
-    std::env::var("HOME")
-        .map(std::path::PathBuf::from)
-        .unwrap_or_else(|_| std::path::PathBuf::from("/"))
+/// Only open files exported by Cue; arbitrary paths from Markdown are rejected.
+#[tauri::command]
+pub fn open_export(app: AppHandle, id: String) -> Result<(), String> {
+    if id.is_empty()
+        || !id
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b"._-".contains(&b))
+    {
+        return Err("Invalid export ID".into());
+    }
+    let root = app
+        .path()
+        .download_dir()
+        .map_err(|e| e.to_string())?
+        .join("Cue")
+        .canonicalize()
+        .map_err(|e| e.to_string())?;
+    let path = root.join(id).canonicalize().map_err(|e| e.to_string())?;
+    if !path.starts_with(&root) || !path.is_file() {
+        return Err("Invalid export path".into());
+    }
+    let status = Command::new("/usr/bin/open")
+        .arg("-R")
+        .arg(path)
+        .status()
+        .map_err(|e| e.to_string())?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err("Could not reveal exported file".into())
+    }
 }

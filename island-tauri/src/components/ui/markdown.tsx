@@ -1,4 +1,5 @@
-import ReactMarkdown from "react-markdown";
+import ReactMarkdown, { defaultUrlTransform } from "react-markdown";
+import { invoke } from "@tauri-apps/api/core";
 import remarkGfm from "remark-gfm";
 import { openUrl } from "@tauri-apps/plugin-opener";
 
@@ -13,6 +14,7 @@ export function Markdown({ text }: { text: string }) {
     <div className="md-results">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
+        urlTransform={(url) => /^cue-file:[a-zA-Z0-9._-]+$/.test(url) ? url : defaultUrlTransform(url)}
         components={{
           a: ({ children, href }) => (
             <a
@@ -21,6 +23,10 @@ export function Markdown({ text }: { text: string }) {
               onClick={(event) => {
                 event.preventDefault();
                 if (!href) return;
+                if (href.startsWith("cue-file:")) {
+                  void invoke("open_export", { id: href.slice(9) }).catch(() => {});
+                  return;
+                }
                 try {
                   const url = new URL(href);
                   if (["http:", "https:", "mailto:"].includes(url.protocol)) {

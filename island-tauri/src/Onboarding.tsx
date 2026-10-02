@@ -12,6 +12,7 @@ import {
   ExternalLink,
   Loader2,
   Mic,
+  Minus,
   SlidersHorizontal,
   KeyRound,
   Keyboard,
@@ -22,9 +23,8 @@ import { IslandShape } from "./components/ui/island-shape";
 import { DotmSquare11 } from "./components/ui/dotm-square-11";
 import { usePrefersReducedMotion } from "./lib/dotmatrix-hooks";
 import { DotmSquare8 } from "./components/ui/dotm-square-8";
-import { HOLD_TO_PEEK_MS } from "./lib/agent-state";
 import {
-  providers, agentModels, keyNames, shortcutText, shortcutBadges,
+  providers, agentModels, keyNames, shortcutText, shortcutBadges, HOLD_TO_PEEK_MS,
   type Provider, type RecordedShortcut,
 } from "./lib/setup-options";
 import "./onboarding.css";
@@ -375,11 +375,16 @@ export default function Onboarding() {
           if (live) setError(String(e));
         });
     void poll();
+    const focused = listen("setup-focus", () => { void poll(); });
+    const refreshOnFocus = () => { void poll(); };
+    window.addEventListener("focus", refreshOnFocus);
     // Poll only while a user can grant permissions outside this window.
     const timer = step === 1 ? window.setInterval(poll, 1500) : undefined;
     return () => {
       live = false;
       clearInterval(timer);
+      window.removeEventListener("focus", refreshOnFocus);
+      void focused.then(unlisten => unlisten());
     };
   }, [paused, step, openRevision]);
 
@@ -734,7 +739,7 @@ export default function Onboarding() {
         }
       }
       if (revision !== presentationRevision.current) return;
-      await getCurrentWindow().hide();
+      await invoke("dismiss_setup");
     } catch (e) {
       if (revision !== presentationRevision.current) return;
       setPaused(false);
@@ -807,7 +812,21 @@ export default function Onboarding() {
         inert={recordingShortcut || completing}
         aria-hidden={recordingShortcut || completing}
       >
-        <div className="ob-drag" data-tauri-drag-region />
+        <div className="ob-drag" title="Drag to move" onPointerDown={(event) => {
+          if (preview || event.button !== 0) return;
+          void getCurrentWindow().startDragging().catch((e) => setError(String(e)));
+        }} />
+        <button
+          className="ob-close ob-minimize"
+          aria-label="Minimize setup"
+          title="Minimize · return from the Dock"
+          onClick={() => {
+            if (preview) return;
+            void getCurrentWindow().minimize().catch((e) => setError(String(e)));
+          }}
+        >
+          <Minus size={14} strokeWidth={1.5} />
+        </button>
         <button
           className="ob-close"
           aria-label="Close setup"
@@ -977,7 +996,7 @@ export default function Onboarding() {
                       title: "Accessibility",
                       reason:
                         "For the right Option shortcut, wherever you work.",
-                      granted: status.accessibility && status.hotkeyReady,
+                      granted: status.accessibility,
                       icon: ShieldCheck,
                     },
                   ].map((p) => (
@@ -999,8 +1018,8 @@ export default function Onboarding() {
                           status.accessibility &&
                           !status.hotkeyReady && (
                             <small>
-                              Waiting for the shortcut. If it stays here,
-                              restart Cue after granting access.
+                              Accessibility is allowed. Connecting the shortcut…
+                              If this stays here, quit and reopen Cue.
                             </small>
                           )}
                       </div>
@@ -1023,9 +1042,21 @@ export default function Onboarding() {
                       )}
                     </div>
                   ))}
+                  {!status.hotkeyReady && (
+                    <div className="ob-permission">
+                      <div>
+                        <p>Already enabled Accessibility? macOS may need Cue to restart.</p>
+                      </div>
+                      <button className="ob-secondary" onClick={() => {
+                        if (preview) return;
+                        void invoke("restart_for_permissions").catch((e) => setError(String(e)));
+                      }}>Restart Cue</button>
+                    </div>
+                  )}
                   <p className="ob-footnote">
-                    If you deny access, you can enable it in System Settings →
-                    Privacy & Security.
+                    If Cue is already enabled but still shows as blocked, remove
+                    the old Cue entry with “−”, add Cue from Applications again,
+                    and enable it. Reopen Cue if macOS asks you to quit.
                   </p>
                 </>
               )}

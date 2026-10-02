@@ -7,12 +7,18 @@
  *   Für Shell-Syntax (Pipes, &&, Globbing) explizit run_shell (sh -c) nutzen.
  * - kill(), nicht close(), beendet die VM.
  */
+import { mkdir, writeFile } from "node:fs/promises";
+import { basename, join } from "node:path";
+import { homedir } from "node:os";
+import { randomUUID } from "node:crypto";
 import { tool } from "ai";
 import { z } from "zod";
 import type { Sandbox } from "@solarisdk/core";
 
 export interface SandboxToolContext {
   sandbox: Sandbox;
+  onExport?: (name: string, url: string) => void;
+  onPreview?: (url: string, expiresAt: string) => void;
   hooks?: {
     onToolDone?: (tool: string, ok: boolean, target?: string) => void;
   };
@@ -42,14 +48,14 @@ function result(ok: boolean, data: Record<string, unknown> = {}) {
 }
 
 export function buildSandboxTools(ctx: SandboxToolContext) {
-  async function run<T>(
+  async function run<T extends { ok: boolean }>(
     name: string,
     fn: () => Promise<T>,
     target?: string,
   ): Promise<T> {
     try {
       const value = await withTimeout(fn(), name);
-      ctx.hooks?.onToolDone?.(name, true, target);
+      ctx.hooks?.onToolDone?.(name, value.ok, target);
       return value;
     } catch (err) {
       ctx.hooks?.onToolDone?.(name, false, target);
@@ -61,21 +67,27 @@ export function buildSandboxTools(ctx: SandboxToolContext) {
     run_command: tool({
       description:
         "Führe eine einzelne Binary mit Argumenten aus (NICHT shell-interpretiert). " +
-        "Für Shell-Syntax (Pipes, &&, Globbing, Env-Expansion) nutze run_shell.",
+        "Für Shell-Syntax nutze run_shell. For persistent servers use background=true; never shell &.",
       inputSchema: z.object({
         command: z.string().describe("Name der Binary, z.B. 'python3' oder 'pip'"),
+        background: z.boolean().default(false).describe("Start a persistent server without waiting for exit; verify it with expose_port."),
         args: z
           .array(z.string())
           .default([])
           .describe("Argumente als Array, z.B. ['install', 'requests']"),
       }),
-      execute: async ({ command, args }) =>
+      execute: async ({ command, args, background }) =>
         run(
           "run_command",
           async () => {
+            if (background) {
+              const process = await ctx.sandbox.commands.start(command, { args });
+              void process.wait().catch(() => {});
+              return { ok: true, cmdId: process.cmdId, status: "started", note: "Process started; use expose_port to verify readiness." };
+            }
             const proc = await ctx.sandbox.commands.run(command, { args });
             return {
-              ok: true,
+              ok: proc.exitCode === 0,
               stdout: proc.stdout,
               stderr: proc.stderr,
               exitCode: proc.exitCode,
@@ -100,7 +112,7 @@ export function buildSandboxTools(ctx: SandboxToolContext) {
               args: ["-c", command],
             });
             return {
-              ok: true,
+              ok: proc.exitCode === 0,
               stdout: proc.stdout,
               stderr: proc.stderr,
               exitCode: proc.exitCode,
@@ -149,10 +161,10 @@ export function buildSandboxTools(ctx: SandboxToolContext) {
         run(
           "list_dir",
           async () => {
-            const proc = await ctx.sandbox.commands.run("sh", {
-              args: ["-c", "ls -la " + path],
+            const proc = await ctx.sandbox.commands.run("ls", {
+              args: ["-la", "--", path],
             });
-            return { ok: true, stdout: proc.stdout, stderr: proc.stderr };
+            return { ok: proc.exitCode === 0, stdout: proc.stdout, stderr: proc.stderr, exitCode: proc.exitCode };
           },
           path,
         ).catch((err) => result(false, { error: String(err) })),
@@ -187,17 +199,39 @@ export function buildSandboxTools(ctx: SandboxToolContext) {
         ).catch((err) => result(false, { error: String(err) })),
     }),
 
+    export_file: tool({
+      description: "Download a finished file to the user’s Mac BEFORE ending the sandbox. Use for every requested deliverable. Return the download link in your answer.",
+      inputSchema: z.object({ path: z.string().min(1) }),
+      execute: async ({ path }) => run("export_file", async () => {
+        const data = await ctx.sandbox.files.download(path);
+        const name = basename(path).replace(/[^a-zA-Z0-9._-]/g, "_") || "download";
+        const id = randomUUID() + "-" + name;
+        const directory = join(homedir(), "Downloads", "Cue");
+        await mkdir(directory, { recursive: true });
+        await writeFile(join(directory, id), data, { flag: "wx" });
+        const url = "cue-file:" + id;
+        ctx.onExport?.(name, url);
+        return { ok: true, name, url };
+      }, path).catch((err) => result(false, { error: String(err) })),
+    }),
+
     expose_port: tool({
       description:
         "Mache einen laufenden Server (z.B. auf Port 3000) über eine öffentliche " +
         "Preview-URL erreichbar. Nutze das, nachdem du einen Server/Dienst gestartet hast.",
-      inputSchema: z.object({ port: z.number() }),
+      inputSchema: z.object({ port: z.number().int().min(1).max(65535) }),
       execute: async ({ port }) =>
         run(
           "expose_port",
           async () => {
+            const ready = await ctx.sandbox.commands.run("python3", { args: ["-c",
+              "import socket,time,sys\nfor _ in range(40):\n try:\n  socket.create_connection(('127.0.0.1'," + port + "),timeout=0.25).close(); sys.exit(0)\n except OSError: time.sleep(0.25)\nsys.exit(1)"
+            ] });
+            if (ready.exitCode !== 0) return { ok: false, error: "Server is not listening on port " + port };
             const preview = await ctx.sandbox.previewUrl(port);
-            return { ok: true, previewUrl: preview.url, token: preview.token };
+            const { expiresAt } = await ctx.sandbox.setTimeout(10 * 60_000);
+            ctx.onPreview?.(preview.url, expiresAt);
+            return { ok: true, previewUrl: preview.url, token: preview.token, expiresAt };
           },
           `:${port}`,
         ).catch((err) => result(false, { error: String(err) })),
