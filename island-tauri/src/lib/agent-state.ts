@@ -552,16 +552,15 @@ export function startListening() {
           maxPeak: number;
           durationMs: number;
         }>("stop_audio_recording")
-          .then(async (recording) => {
+          .then((recording) => {
             queueMediaControl("resume");
             if (gen !== listenGen) return;
-            const blob = await fetch(recording.dataUri).then((response) =>
-              response.blob(),
-            );
+            // Native WAV data is already in memory; fetching data: URLs is blocked by the packaged CSP.
+            const audioBytes = atob(recording.dataUri.split(",")[1]).length;
             void invoke("log_line", {
-              line: `[island] Audio: ${blob.size} bytes, WAV=${recording.durationMs}ms, Mic="${recording.device}", maxPegel=${recording.maxPeak.toFixed(3)}`,
+              line: `[island] Audio: ${audioBytes} bytes, WAV=${recording.durationMs}ms, Mic="${recording.device}", maxPegel=${recording.maxPeak.toFixed(3)}`,
             });
-            if (blob.size <= 44) {
+            if (audioBytes <= 44) {
               showAudioError(
                 recording.durationMs < 700
                   ? "Recording too short"
@@ -602,7 +601,7 @@ export function startListening() {
             invoke("log_line", {
               line: `[island] Aufnahme-Stop fehlgeschlagen: ${err}`,
             });
-            showAudioError("Recording failed");
+            showAudioError("Recording failed", String(err));
           });
       };
       stopRecording = stopAndTranscribe;
@@ -620,7 +619,7 @@ export function startListening() {
       invoke("log_line", {
         line: `[island] Mikrofon nicht verfuegbar: ${err}`,
       });
-      showAudioError("Microphone unavailable");
+      showAudioError("Microphone unavailable", String(err));
     });
 }
 
