@@ -1,8 +1,10 @@
 # Cue alpha download
 
-Current installer: https://trycue.lol/downloads/Cue-0.1.5-apple-silicon.dmg
+Current installer: https://trycue.lol/downloads/Cue-0.1.6-apple-silicon.dmg
 
-Size: 52,942,055 bytes. SHA-256: `126662bdf4cc97c14948375684321f2a8e1c1811a67db06a8e666c266594bfdd`.
+Size: 52,941,709 bytes. SHA-256: `e445c88b6450f97302212b9bd1b1585c06d70c01c916a647b7c9218cd178e253`.
+
+Version 0.1.6 removes the data-URL fetch blocked by packaged CSP after microphone recording. Native WAV size is checked in memory, and actual recording errors reach onboarding. Frontend/release build, sealed app signatures, and DMG checksum verified; live voice demo still needs a user run.
 
 Version 0.1.5 opens pending onboarding after application startup, checks current permissions as well as saved setup, and restores dismissed setup when Cue is reopened. The download notice explains the manual macOS Open Anyway step and remains visible until dismissed. Build, sealed app signatures, and DMG checksum verified; GUI first-launch behavior still needs a user check.
 

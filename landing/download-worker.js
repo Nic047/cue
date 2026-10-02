@@ -1,4 +1,4 @@
-const filename = 'Cue-0.1.5-apple-silicon.dmg';
+const filename = 'Cue-0.1.6-apple-silicon.dmg';
 const download = '/downloads/' + filename;
 const validWebsiteId = (value) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value || '');
 
