@@ -1,3 +1,4 @@
+import { parseAgentEvent } from "../../../shared/agent-events";
 import { useEffect, useState } from "react";
 import { emitTo, listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
@@ -338,10 +339,11 @@ function ensureWired() {
   }
 
   listen<string>("orchestrator-event", (e) => {
-    let ev: any;
-    try {
-      ev = JSON.parse(e.payload);
-    } catch {
+    const ev = parseAgentEvent(e.payload);
+    if (!ev) {
+      void invoke("log_line", {
+        line: "[island] Unknown or malformed agent event ignored.",
+      });
       return;
     }
 
@@ -352,7 +354,7 @@ function ensureWired() {
         strategy: ev.strategy ?? "",
         question: null,
         planMs: store.startedAt ? Date.now() - store.startedAt : null,
-        tasks: (ev.tasks ?? []).map((t: any) => ({
+        tasks: (ev.tasks ?? []).map((t) => ({
           id: t.id,
           type: t.type,
           title: t.title,
@@ -360,15 +362,15 @@ function ensureWired() {
         })),
       });
     } else if (ev.type === "question") {
-      const options = Array.isArray(ev.options)
-        ? ev.options.filter((o: any) => typeof o === "string").slice(0, 4)
-        : [];
+      const options = Array.isArray(ev.options) ? ev.options.slice(0, 4) : [];
       set({
         question: { text: String(ev.text ?? ""), options },
       });
     } else if (ev.type === "task_start") {
       const msg = ev.message ?? "";
-      const task = ev.taskId ? store.tasks.find((t) => t.id === ev.taskId) : taskForMessage(msg);
+      const task = ev.taskId
+        ? store.tasks.find((t) => t.id === ev.taskId)
+        : taskForMessage(msg);
       if (task) {
         set({
           tasks: store.tasks.map((t) =>
@@ -401,7 +403,9 @@ function ensureWired() {
       const raw = cleanStep(msg);
       const ok = ev.ok !== false && !raw.includes("fehlgeschlagen");
       const step: AgentStep = { label: raw, ok };
-      const task = ev.taskId ? store.tasks.find((t) => t.id === ev.taskId) : taskForMessage(msg);
+      const task = ev.taskId
+        ? store.tasks.find((t) => t.id === ev.taskId)
+        : taskForMessage(msg);
       if (task) {
         set({
           tasks: store.tasks.map((t) =>
@@ -413,7 +417,9 @@ function ensureWired() {
         set({ allSteps: [...store.allSteps, step] });
       }
     } else if (ev.type === "task_done") {
-      const task = store.tasks.find((t) => ev.taskId ? t.id === ev.taskId : t.title === ev.title);
+      const task = store.tasks.find((t) =>
+        ev.taskId ? t.id === ev.taskId : t.title === ev.title,
+      );
       const step: AgentStep = {
         label: `${ev.ok ? "OK" : "FEHLER"} — ${ev.title ?? ""} (${ev.steps ?? 0} steps)`,
         ok: Boolean(ev.ok),
@@ -485,6 +491,7 @@ function ensureWired() {
 // Laufende Aufnahme-Generation: cancel()/Neustart machen alte native
 // Start- und Transkriptionsketten wirkungslos.
 let listenGen = 0;
+let stopRecording: (() => void) | undefined;
 let mediaControlQueue: Promise<void> | null = null;
 
 function queueMediaControl(action: "pause" | "resume") {
@@ -598,7 +605,7 @@ export function startListening() {
             showAudioError("Recording failed");
           });
       };
-      (store as any)._stopFn = stopAndTranscribe;
+      stopRecording = stopAndTranscribe;
       window.setTimeout(() => {
         if (gen !== listenGen || store.phase !== "listening") return;
         invoke("log_line", {
@@ -618,7 +625,7 @@ export function startListening() {
 }
 
 export function stopListeningAndRun() {
-  const stop = (store as any)._stopFn as (() => void) | undefined;
+  const stop = stopRecording;
   if (store.phase === "arming") {
     listenGen++;
     void invoke("cancel_audio_recording");
@@ -639,7 +646,7 @@ export function cancel() {
   listenGen++;
   void invoke("cancel_audio_recording");
   queueMediaControl("resume");
-  (store as any)._stopFn = undefined;
+  stopRecording = undefined;
   void invoke("kill_task");
   reset();
 }

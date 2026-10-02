@@ -1,3 +1,7 @@
+import {
+  waitWithTimeout,
+  WaitTimeoutError,
+} from "./shared/wait-with-timeout.js";
 /**
  * Generische Playwright-Tools für den Browser-Agenten.
  * Jedes Tool bildet genau eine Browser-Aktion ab; das Modell entscheidet pro
@@ -21,39 +25,33 @@ export interface ToolContext {
 
 const TOOL_TIMEOUT_MS = 90_000;
 
-/** Ein Browser-Aufruf, der nach TOOL_TIMEOUT_MS hart abbricht (falls möglich). */
-async function withTimeout<T>(promise: Promise<T>, label: string): Promise<T> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  try {
-    return await Promise.race([
-      promise,
-      new Promise<never>((_, reject) => {
-        timer = setTimeout(
-          () => reject(new Error(label + " timeout")),
-          TOOL_TIMEOUT_MS,
-        );
-      }),
-    ]);
-  } finally {
-    if (timer !== undefined) clearTimeout(timer);
-  }
-}
-
 function result(ok: boolean, data: Record<string, unknown> = {}) {
   return { ok, ...data };
 }
 
 export function buildBrowserTools(ctx: ToolContext) {
+  let expired = false;
+
   async function run<T extends { ok: boolean }>(
     name: string,
     fn: () => Promise<T>,
     target?: string,
   ): Promise<T> {
+    if (expired) throw new Error("Session stopped after a tool timeout");
     try {
-      const value = await withTimeout(fn(), name);
+      const value = await waitWithTimeout(fn(), TOOL_TIMEOUT_MS, name);
       ctx.hooks?.onToolDone?.(name, value.ok, target);
       return value;
     } catch (err) {
+      if (err instanceof WaitTimeoutError) {
+        expired = true;
+        // End the session so timed-out operations cannot overlap subsequent tools.
+        await waitWithTimeout(
+          ctx.browser.close(),
+          5_000,
+          "tool-timeout cleanup",
+        ).catch(() => {});
+      }
       ctx.hooks?.onToolDone?.(name, false, target);
       throw err;
     }
@@ -75,23 +73,27 @@ export function buildBrowserTools(ctx: ToolContext) {
           ),
       }),
       execute: async ({ url, waitUntil }) =>
-        run("navigate", async () => {
-          // Erstversuch wie angefragt, danach ein Retry mit großzügigerem
-          // Timeout, BEVOR das Modell auf eine andere Quelle ausweicht.
-          try {
-            await ctx.page.goto(url, { waitUntil, timeout: 20_000 });
-          } catch {
-            await ctx.page.goto(url, {
-              waitUntil: "domcontentloaded",
-              timeout: 30_000,
-            });
-          }
-          return {
-            ok: true,
-            url: ctx.page.url(),
-            title: await ctx.page.title(),
-          };
-        }, url).catch((err) => {
+        run(
+          "navigate",
+          async () => {
+            // Erstversuch wie angefragt, danach ein Retry mit großzügigerem
+            // Timeout, BEVOR das Modell auf eine andere Quelle ausweicht.
+            try {
+              await ctx.page.goto(url, { waitUntil, timeout: 20_000 });
+            } catch {
+              await ctx.page.goto(url, {
+                waitUntil: "domcontentloaded",
+                timeout: 30_000,
+              });
+            }
+            return {
+              ok: true,
+              url: ctx.page.url(),
+              title: await ctx.page.title(),
+            };
+          },
+          url,
+        ).catch((err) => {
           // Fehler NICHT werfen: als strukturiertes Ergebnis ans Modell
           // melden, damit der Loop weiterlaufen kann.
           return {
@@ -117,22 +119,25 @@ export function buildBrowserTools(ctx: ToolContext) {
           .describe("Pixel pro Scroll-Schritt bei down/up."),
       }),
       execute: async ({ direction, amount }) =>
-        run("scroll", async () => {
-          if (direction === "top") {
-            await ctx.page.evaluate(() => window.scrollTo(0, 0));
-          } else if (direction === "bottom") {
-            await ctx.page.evaluate(() =>
-              window.scrollTo(0, document.body.scrollHeight),
-            );
-          } else {
-            const delta = direction === "down" ? amount : -amount;
-            await ctx.page.mouse.wheel(0, delta);
-          }
-          await ctx.page.waitForTimeout(300);
-          const scrollY = await ctx.page.evaluate(() => window.scrollY);
-          return { ok: true, scrollY };
-        }, direction)
-          .catch((err) => result(false, { error: String(err) })),
+        run(
+          "scroll",
+          async () => {
+            if (direction === "top") {
+              await ctx.page.evaluate(() => window.scrollTo(0, 0));
+            } else if (direction === "bottom") {
+              await ctx.page.evaluate(() =>
+                window.scrollTo(0, document.body.scrollHeight),
+              );
+            } else {
+              const delta = direction === "down" ? amount : -amount;
+              await ctx.page.mouse.wheel(0, delta);
+            }
+            await ctx.page.waitForTimeout(300);
+            const scrollY = await ctx.page.evaluate(() => window.scrollY);
+            return { ok: true, scrollY };
+          },
+          direction,
+        ).catch((err) => result(false, { error: String(err) })),
     }),
 
     wait: tool({
@@ -166,41 +171,44 @@ export function buildBrowserTools(ctx: ToolContext) {
           ),
       }),
       execute: async ({ maxChars, offset, waitForNetworkIdle }) =>
-        run("read_page", async () => {
-          if (waitForNetworkIdle) {
-            try {
-              await ctx.page.waitForLoadState("networkidle", {
-                timeout: 2500,
-              });
-            } catch {
-              // Timeout ist hier kein Fehler — einfach lesen, was da ist.
+        run(
+          "read_page",
+          async () => {
+            if (waitForNetworkIdle) {
+              try {
+                await ctx.page.waitForLoadState("networkidle", {
+                  timeout: 2500,
+                });
+              } catch {
+                // Timeout ist hier kein Fehler — einfach lesen, was da ist.
+              }
             }
-          }
-          const fullText = await ctx.page.locator("body").innerText();
-          const links = await ctx.page
-            .locator("a")
-            .evaluateAll((els: HTMLElement[]) =>
-              els
-                .map((a) => ({
-                  text: a.textContent?.trim() ?? "",
-                  href: (a as HTMLAnchorElement).href,
-                }))
-                .filter((l) => l.text.length > 0),
-            );
-          const slice = fullText.slice(offset, offset + maxChars);
-          return {
-            ok: true,
-            url: ctx.page.url(),
-            text: slice,
-            totalLength: fullText.length,
-            offset,
-            truncated: offset + maxChars < fullText.length,
-            links: links.slice(0, 100),
-          };
-        }, await ctx.page.title().catch(() => ""))
-          .catch((err) =>
-            result(false, { error: String(err), url: ctx.page.url() }),
-          ),
+            const fullText = await ctx.page.locator("body").innerText();
+            const links = await ctx.page
+              .locator("a")
+              .evaluateAll((els: HTMLElement[]) =>
+                els
+                  .map((a) => ({
+                    text: a.textContent?.trim() ?? "",
+                    href: (a as HTMLAnchorElement).href,
+                  }))
+                  .filter((l) => l.text.length > 0),
+              );
+            const slice = fullText.slice(offset, offset + maxChars);
+            return {
+              ok: true,
+              url: ctx.page.url(),
+              text: slice,
+              totalLength: fullText.length,
+              offset,
+              truncated: offset + maxChars < fullText.length,
+              links: links.slice(0, 100),
+            };
+          },
+          await ctx.page.title().catch(() => ""),
+        ).catch((err) =>
+          result(false, { error: String(err), url: ctx.page.url() }),
+        ),
     }),
 
     click: tool({
@@ -263,7 +271,11 @@ export function buildBrowserTools(ctx: ToolContext) {
               type: "jpeg",
               quality: 70,
             });
-            return { ok: true, image: buf.toString("base64"), mediaType: "image/jpeg" };
+            return {
+              ok: true,
+              image: buf.toString("base64"),
+              mediaType: "image/jpeg",
+            };
           },
           fullPage ? "fullPage" : "viewport",
         ).catch((err) => result(false, { error: String(err) })),
@@ -304,9 +316,21 @@ export function buildBrowserTools(ctx: ToolContext) {
           "new_tab",
           async () => {
             const context = ctx.browser.contexts()[0];
-            const newPage = await context.newPage();
-            if (url)
-              await newPage.goto(url, { waitUntil: "domcontentloaded" });
+            const newPage = await waitWithTimeout(
+              context.newPage(),
+              TOOL_TIMEOUT_MS,
+              "new_tab",
+              (page) => page.close(),
+            );
+            if (expired) {
+              await newPage.close();
+              throw new Error("Session expired");
+            }
+            if (url) await newPage.goto(url, { waitUntil: "domcontentloaded" });
+            if (expired) {
+              await newPage.close();
+              throw new Error("Session expired");
+            }
             ctx.page = newPage;
             return {
               ok: true,

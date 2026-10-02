@@ -1,3 +1,7 @@
+import {
+  waitWithTimeout,
+  WaitTimeoutError,
+} from "./shared/wait-with-timeout.js";
 /**
  * Generische Sandbox-Tools für den Agenten.
  * Läuft auf @solarisdk/sandbox (microVM, snapshot-basiert).
@@ -7,7 +11,7 @@
  *   Für Shell-Syntax (Pipes, &&, Globbing) explizit run_shell (sh -c) nutzen.
  * - kill(), nicht close(), beendet die VM.
  */
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, writeFile, rm } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { homedir } from "node:os";
 import { randomUUID } from "node:crypto";
@@ -26,38 +30,33 @@ export interface SandboxToolContext {
 
 const TOOL_TIMEOUT_MS = 60_000;
 
-async function withTimeout<T>(promise: Promise<T>, label: string): Promise<T> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  try {
-    return await Promise.race([
-      promise,
-      new Promise<never>((_, reject) => {
-        timer = setTimeout(
-          () => reject(new Error(label + " timeout " + TOOL_TIMEOUT_MS + "ms")),
-          TOOL_TIMEOUT_MS,
-        );
-      }),
-    ]);
-  } finally {
-    if (timer !== undefined) clearTimeout(timer);
-  }
-}
-
 function result(ok: boolean, data: Record<string, unknown> = {}) {
   return { ok, ...data };
 }
 
 export function buildSandboxTools(ctx: SandboxToolContext) {
+  let expired = false;
+
   async function run<T extends { ok: boolean }>(
     name: string,
     fn: () => Promise<T>,
     target?: string,
   ): Promise<T> {
+    if (expired) throw new Error("Session stopped after a tool timeout");
     try {
-      const value = await withTimeout(fn(), name);
+      const value = await waitWithTimeout(fn(), TOOL_TIMEOUT_MS, name);
       ctx.hooks?.onToolDone?.(name, value.ok, target);
       return value;
     } catch (err) {
+      if (err instanceof WaitTimeoutError) {
+        expired = true;
+        // End the session so timed-out operations cannot overlap subsequent tools.
+        await waitWithTimeout(
+          ctx.sandbox.kill(),
+          5_000,
+          "tool-timeout cleanup",
+        ).catch(() => {});
+      }
       ctx.hooks?.onToolDone?.(name, false, target);
       throw err;
     }
@@ -69,8 +68,15 @@ export function buildSandboxTools(ctx: SandboxToolContext) {
         "Führe eine einzelne Binary mit Argumenten aus (NICHT shell-interpretiert). " +
         "Für Shell-Syntax nutze run_shell. For persistent servers use background=true; never shell &.",
       inputSchema: z.object({
-        command: z.string().describe("Name der Binary, z.B. 'python3' oder 'pip'"),
-        background: z.boolean().default(false).describe("Start a persistent server without waiting for exit; verify it with expose_port."),
+        command: z
+          .string()
+          .describe("Name der Binary, z.B. 'python3' oder 'pip'"),
+        background: z
+          .boolean()
+          .default(false)
+          .describe(
+            "Start a persistent server without waiting for exit; verify it with expose_port.",
+          ),
         args: z
           .array(z.string())
           .default([])
@@ -81,9 +87,16 @@ export function buildSandboxTools(ctx: SandboxToolContext) {
           "run_command",
           async () => {
             if (background) {
-              const process = await ctx.sandbox.commands.start(command, { args });
+              const process = await ctx.sandbox.commands.start(command, {
+                args,
+              });
               void process.wait().catch(() => {});
-              return { ok: true, cmdId: process.cmdId, status: "started", note: "Process started; use expose_port to verify readiness." };
+              return {
+                ok: true,
+                cmdId: process.cmdId,
+                status: "started",
+                note: "Process started; use expose_port to verify readiness.",
+              };
             }
             const proc = await ctx.sandbox.commands.run(command, { args });
             return {
@@ -126,7 +139,9 @@ export function buildSandboxTools(ctx: SandboxToolContext) {
       description:
         "Schreibe Text in eine Datei in der Sandbox (überschreibt, falls sie existiert).",
       inputSchema: z.object({
-        path: z.string().describe("Absoluter oder relativer Pfad in der Sandbox"),
+        path: z
+          .string()
+          .describe("Absoluter oder relativer Pfad in der Sandbox"),
         content: z.string(),
       }),
       execute: async ({ path, content }) =>
@@ -164,7 +179,12 @@ export function buildSandboxTools(ctx: SandboxToolContext) {
             const proc = await ctx.sandbox.commands.run("ls", {
               args: ["-la", "--", path],
             });
-            return { ok: proc.exitCode === 0, stdout: proc.stdout, stderr: proc.stderr, exitCode: proc.exitCode };
+            return {
+              ok: proc.exitCode === 0,
+              stdout: proc.stdout,
+              stderr: proc.stderr,
+              exitCode: proc.exitCode,
+            };
           },
           path,
         ).catch((err) => result(false, { error: String(err) })),
@@ -200,19 +220,31 @@ export function buildSandboxTools(ctx: SandboxToolContext) {
     }),
 
     export_file: tool({
-      description: "Download a finished file to the user’s Mac BEFORE ending the sandbox. Use for every requested deliverable. Return the download link in your answer.",
+      description:
+        "Download a finished file to the user’s Mac BEFORE ending the sandbox. Use for every requested deliverable. Return the download link in your answer.",
       inputSchema: z.object({ path: z.string().min(1) }),
-      execute: async ({ path }) => run("export_file", async () => {
-        const data = await ctx.sandbox.files.download(path);
-        const name = basename(path).replace(/[^a-zA-Z0-9._-]/g, "_") || "download";
-        const id = randomUUID() + "-" + name;
-        const directory = join(homedir(), "Downloads", "Cue");
-        await mkdir(directory, { recursive: true });
-        await writeFile(join(directory, id), data, { flag: "wx" });
-        const url = "cue-file:" + id;
-        ctx.onExport?.(name, url);
-        return { ok: true, name, url };
-      }, path).catch((err) => result(false, { error: String(err) })),
+      execute: async ({ path }) =>
+        run(
+          "export_file",
+          async () => {
+            const data = await ctx.sandbox.files.download(path);
+            if (expired) throw new Error("Session expired");
+            const name =
+              basename(path).replace(/[^a-zA-Z0-9._-]/g, "_") || "download";
+            const id = randomUUID() + "-" + name;
+            const directory = join(homedir(), "Downloads", "Cue");
+            await mkdir(directory, { recursive: true });
+            await writeFile(join(directory, id), data, { flag: "wx" });
+            if (expired) {
+              await rm(join(directory, id), { force: true });
+              throw new Error("Session expired");
+            }
+            const url = "cue-file:" + id;
+            ctx.onExport?.(name, url);
+            return { ok: true, name, url };
+          },
+          path,
+        ).catch((err) => result(false, { error: String(err) })),
     }),
 
     expose_port: tool({
@@ -224,14 +256,29 @@ export function buildSandboxTools(ctx: SandboxToolContext) {
         run(
           "expose_port",
           async () => {
-            const ready = await ctx.sandbox.commands.run("python3", { args: ["-c",
-              "import socket,time,sys\nfor _ in range(40):\n try:\n  socket.create_connection(('127.0.0.1'," + port + "),timeout=0.25).close(); sys.exit(0)\n except OSError: time.sleep(0.25)\nsys.exit(1)"
-            ] });
-            if (ready.exitCode !== 0) return { ok: false, error: "Server is not listening on port " + port };
+            const ready = await ctx.sandbox.commands.run("python3", {
+              args: [
+                "-c",
+                "import socket,time,sys\nfor _ in range(40):\n try:\n  socket.create_connection(('127.0.0.1'," +
+                  port +
+                  "),timeout=0.25).close(); sys.exit(0)\n except OSError: time.sleep(0.25)\nsys.exit(1)",
+              ],
+            });
+            if (ready.exitCode !== 0)
+              return {
+                ok: false,
+                error: "Server is not listening on port " + port,
+              };
             const preview = await ctx.sandbox.previewUrl(port);
             const { expiresAt } = await ctx.sandbox.setTimeout(10 * 60_000);
+            if (expired) throw new Error("Session expired");
             ctx.onPreview?.(preview.url, expiresAt);
-            return { ok: true, previewUrl: preview.url, token: preview.token, expiresAt };
+            return {
+              ok: true,
+              previewUrl: preview.url,
+              token: preview.token,
+              expiresAt,
+            };
           },
           `:${port}`,
         ).catch((err) => result(false, { error: String(err) })),

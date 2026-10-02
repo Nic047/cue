@@ -1,3 +1,4 @@
+import { waitWithTimeout } from "./shared/wait-with-timeout.js";
 /**
  * Ein Benchmark-Durchlauf (Kindprozess): fixierte example.com-Task auf der
  * Fast-Lane (stealth:false), Modell kommt per CHEAP/FALLBACK_MODEL-Env.
@@ -5,10 +6,7 @@
  */
 import "dotenv/config";
 import { Solari } from "@solarisdk/browser";
-import {
-  runBrowserTask,
-  type Task,
-} from "./orchestrator.js";
+import { runBrowserTask, type Task } from "./orchestrator.js";
 
 const MODEL = process.env.CHEAP_MODEL ?? "unknown";
 
@@ -58,10 +56,9 @@ async function main() {
   } finally {
     // close() kann bei angeschlagenem Backend haengen — nicht den
     // JSON-Output (schon gedruckt) blockieren.
-    await Promise.race([
-      solari.close().catch(() => {}),
-      new Promise((r) => setTimeout(r, 10_000)),
-    ]);
+    await waitWithTimeout(solari.close(), 10_000, "solari.close").catch(
+      () => {},
+    );
   }
 }
 
