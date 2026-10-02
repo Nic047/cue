@@ -139,7 +139,7 @@ pub fn run() {
                 prefs.complete = false;
             }
             global_shortcut::set_shortcut(&prefs.shortcut);
-            let complete = prefs.complete && onboarding::has_keys();
+            let complete = onboarding::setup_complete(&prefs);
             app.manage(native_audio::NativeAudio::with_device(
                 prefs.microphone.clone(),
             ));
@@ -282,9 +282,6 @@ pub fn run() {
                     }
                 })
                 .build(app)?;
-            if !complete {
-                onboarding::open(app.handle(), false).map_err(std::io::Error::other)?;
-            }
             Ok(())
         })
         .build(tauri::generate_context!())
@@ -302,6 +299,18 @@ pub fn run() {
                             NSApplication::sharedApplication(mtm)
                                 .setApplicationIconImage(Some(&icon));
                         }
+                    }
+                }
+            }
+            if matches!(event, tauri::RunEvent::Ready) {
+                // Create and focus setup after macOS finishes launching the application.
+                let Some(state) = app.try_state::<onboarding::OnboardingState>() else {
+                    return;
+                };
+                let complete = onboarding::setup_complete(&state.0.lock().unwrap());
+                if !complete {
+                    if let Err(error) = onboarding::open(app, false) {
+                        eprintln!("[cue] Could not open onboarding: {error}");
                     }
                 }
             }

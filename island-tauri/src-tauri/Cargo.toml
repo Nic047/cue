@@ -1,6 +1,6 @@
 [package]
 name = "cue"
-version = "0.1.4"
+version = "0.1.5"
 description = "Cue macOS AI assistant"
 authors = ["Cue contributors"]
 edition = "2021"

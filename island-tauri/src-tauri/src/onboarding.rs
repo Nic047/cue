@@ -172,6 +172,14 @@ fn microphone_permission() -> String {
     .into()
 }
 
+pub fn setup_complete(prefs: &Preferences) -> bool {
+    prefs.complete
+        && (cfg!(debug_assertions) || prefs.installed_setup_complete)
+        && has_keys()
+        && microphone_permission() == "granted"
+        && accessibility_granted()
+}
+
 // Check both Accessibility and the CoreGraphics event permission used by our shortcut.
 #[link(name = "CoreGraphics", kind = "framework")]
 extern "C" {
@@ -455,9 +463,13 @@ pub fn reopen_setup(app: &AppHandle) {
         if let Some(win) = app.get_webview_window(label) {
             if win.is_visible().unwrap_or(false) || win.is_minimized().unwrap_or(false) {
                 let _ = present_setup_window(&win);
-                break;
+                return;
             }
         }
+    }
+    // Launching Cue again should restore setup, including a previously dismissed window.
+    if let Err(error) = open(app, false) {
+        eprintln!("[cue] Could not reopen onboarding: {error}");
     }
 }
 
