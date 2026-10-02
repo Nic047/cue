@@ -1,20 +1,16 @@
+import { ResultsPanel } from "./components/results-panel";
+import { RecentChatsDialog } from "./components/recent-chats-dialog";
+import { usePillShortcuts } from "./lib/use-pill-shortcuts";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { emitTo, listen } from "@tauri-apps/api/event";
+import { listen } from "@tauri-apps/api/event";
 import { currentMonitor, getCurrentWindow } from "@tauri-apps/api/window";
 import { AnimatePresence, motion, useSpring } from "framer-motion";
-import { Check, Copy, Trash2 } from "lucide-react";
 import {
   IS_DEMO,
-  HOLD_TO_PEEK_MS,
   resultsPanelSize,
   useAgent,
-  wireShortcuts,
-  startListening,
-  stopListeningAndRun,
   answerQuestion,
-  hidePill,
-  cancel,
   reset,
   openDetail,
   closeDetail,
@@ -28,13 +24,6 @@ import { DotmSquare11 } from "./components/ui/dotm-square-11";
 import { DotmSquare8 } from "./components/ui/dotm-square-8";
 import { IslandShape } from "./components/ui/island-shape";
 import { Shimmer } from "./components/ui/shimmer-text";
-import { Markdown } from "./components/ui/markdown";
-import {
-  ContextMenu,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuTrigger,
-} from "./components/ui/context-menu";
 
 // Feste Breite fuer alle Text-Zustaende; nur der leere Start-Flash ist schmal.
 export const PILL_W = 230;
@@ -54,15 +43,13 @@ const FLASH_MS = 700;
 // Hold-to-Peek: Option 1.5s halten => Status einblenden; loslassen (oder
 // spaetestens nach 5s) => wieder verstecken.
 
-const PEEK_MAX_MS = 5000;
 const RECENT_CHATS_W = 420;
 const RECENT_CHATS_H = 380;
 
-function log(line: string) {
-  void invoke("log_line", { line });
-}
-
-function presentWindow(size: { width: number; height: number }, animate = false) {
+function presentWindow(
+  size: { width: number; height: number },
+  animate = false,
+) {
   return invoke("show_window", { ...size, animate });
 }
 
@@ -136,15 +123,28 @@ export default function App() {
     if (IS_DEMO) return;
     let disposed = false;
     let unlisten: (() => void) | undefined;
-    void listen<{ width: number; height: number }>("notch-layout", ({ payload }) => {
-      if (!disposed) setNotch(payload);
-    }).then(async (stop) => {
-      if (disposed) { stop(); return; }
-      unlisten = stop;
-      const layout = await invoke<{ width: number; height: number }>("get_notch_layout");
-      if (!disposed) setNotch(layout);
-    }).catch(() => {});
-    return () => { disposed = true; unlisten?.(); };
+    void listen<{ width: number; height: number }>(
+      "notch-layout",
+      ({ payload }) => {
+        if (!disposed) setNotch(payload);
+      },
+    )
+      .then(async (stop) => {
+        if (disposed) {
+          stop();
+          return;
+        }
+        unlisten = stop;
+        const layout = await invoke<{ width: number; height: number }>(
+          "get_notch_layout",
+        );
+        if (!disposed) setNotch(layout);
+      })
+      .catch(() => {});
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
   }, []);
   const agent = useAgent();
   const {
@@ -164,25 +164,24 @@ export default function App() {
   useEffect(() => {
     if (!question || IS_DEMO) return;
     let disposed = false;
-    void currentMonitor().then((monitor) => {
-      if (!monitor || disposed) return;
-      setQuestionWidth(Math.min(PANEL_W, monitor.size.width / monitor.scaleFactor - 32));
-      setQuestionMaxHeight(Math.max(240, monitor.size.height / monitor.scaleFactor - notch.height - 48));
-    }).catch(() => {});
-    return () => { disposed = true; };
+    void currentMonitor()
+      .then((monitor) => {
+        if (!monitor || disposed) return;
+        setQuestionWidth(
+          Math.min(PANEL_W, monitor.size.width / monitor.scaleFactor - 32),
+        );
+        setQuestionMaxHeight(
+          Math.max(
+            240,
+            monitor.size.height / monitor.scaleFactor - notch.height - 48,
+          ),
+        );
+      })
+      .catch(() => {});
+    return () => {
+      disposed = true;
+    };
   }, [question, notch.height]);
-  const resultMarkdown = detail?.trim() || answer || "";
-  const skeletonLineCount = Math.min(
-    12,
-    Math.max(1, Math.ceil(resultMarkdown.trim().length / 90)),
-  );
-  const workedSeconds = Math.round((totalMs ?? 0) / 1000);
-  const workedLabel =
-    totalMs == null
-      ? "Work complete"
-      : workedSeconds < 60
-        ? `Worked for ${workedSeconds}s`
-        : `Worked for ${Math.floor(workedSeconds / 60)}m ${String(workedSeconds % 60).padStart(2, "0")}s`;
   const phaseRef = useRef(phase);
   useEffect(() => {
     phaseRef.current = phase;
@@ -228,17 +227,10 @@ export default function App() {
   const [recentChatItems, setRecentChatItems] = useState<RecentChat[]>([]);
   const [resultsRevealed, setResultsRevealed] = useState(false);
   const [skeletonReady, setSkeletonReady] = useState(false);
-  const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "error">(
-    "idle",
-  );
-  useEffect(() => {
-    if (copyStatus === "idle") return;
-    const timer = window.setTimeout(() => setCopyStatus("idle"), 1800);
-    return () => window.clearTimeout(timer);
-  }, [copyStatus]);
   const errorTextRef = useRef<HTMLSpanElement>(null);
   const [errorPillWidth, setErrorPillWidth] = useState(PILL_W);
-  const statusPillWidth = phase === "error" ? Math.max(PILL_W, errorPillWidth) : PILL_W;
+  const statusPillWidth =
+    phase === "error" ? Math.max(PILL_W, errorPillWidth) : PILL_W;
   function dismissRecentChats() {
     setRecentChatsOpen(false);
     returnToRecentChatsRef.current = false;
@@ -280,7 +272,10 @@ export default function App() {
     if (textWidth == null) return;
     const nextWidth = Math.min(
       notched ? notch.width + 48 + 400 : MAX_ERROR_PILL_W,
-      Math.max(PILL_W, Math.ceil(notched ? notch.width + 48 + textWidth + 28 : textWidth + 64)),
+      Math.max(
+        PILL_W,
+        Math.ceil(notched ? notch.width + 48 + textWidth + 28 : textWidth + 64),
+      ),
     );
     setErrorPillWidth((width) => (width === nextWidth ? width : nextWidth));
   }, [phase, error, view, PILL_W, notched, notch.width]);
@@ -375,147 +370,15 @@ export default function App() {
     }
   }, [phase]);
 
-  // Shortcut-Verdrahtung: einmal, global.
-  // Escape kommt nur an, wenn die Pill offen ist (Rust schluckt es sonst
-  // gar nicht erst) — die Front-App sieht es dann nie.
-  // Einmal = Pill weg (Task laeuft ggf. weiter), 2x schnell = alles killen.
-  // Offenes Detail-Overlay geht immer vor (schliessen statt killen).
-  // Hold-to-Peek: Option 1.5s halten (nur waehrend working) blendet den
-  // Status ein; Loslassen versteckt ihn wieder. Tap-Verhalten unveraendert.
-  const lastEsc = useRef(0);
-  const holdTimerRef = useRef<number | null>(null);
-  const peekShownRef = useRef(false);
-  const peekHideTimerRef = useRef<number | null>(null);
-  // Doppel-Tap rechte Option bei Done: erster Tap wartet kurz, ob ein
-  // zweiter folgt (Results oeffnen) — sonst normaler Reset. EIN Fenster
-  // fuer beides (Timer + Vergleich), sonst entsteht eine Luecke, in der
-  // der Reset schon lief, der zweite Tap aber noch als "Doppel" zaehlt
-  // (oder umgekehrt) — genau das hat den Doppel-Tap unzuverlaessig gemacht.
-  const DONE_DOUBLE_TAP_MS = 800;
-  const lastDoneTap = useRef(0);
-  const doneTapTimer = useRef<number | null>(null);
-
-  function clearHoldTimer() {
-    if (holdTimerRef.current != null) {
-      window.clearTimeout(holdTimerRef.current);
-      holdTimerRef.current = null;
-    }
-  }
-
-  function clearPeekHideTimer() {
-    if (peekHideTimerRef.current != null) {
-      window.clearTimeout(peekHideTimerRef.current);
-      peekHideTimerRef.current = null;
-    }
-  }
-
-  function showPeek() {
-    holdTimerRef.current = null;
-    if (phaseRef.current !== "working" || peekShownRef.current) return;
-    peekShownRef.current = true;
-    void presentWindow(pillDimensions.current).then(() => emitTo("onboarding", "onboarding-peek", {}));
-    // Peek zeigt die kleine Pill (Working-Status) — gleiche Masse wie
-    // Voice: Small-Pill-Hoehe, keine Panel-Groesse mehr.
-    peekHideTimerRef.current = window.setTimeout(() => {
-      peekHideTimerRef.current = null;
-      // Sicherheitsnetz: auch bei gehaltenem Finger irgendwann zu
-      // (Release blendet normalerweise aus, s. onRelease).
-      if (peekShownRef.current && phaseRef.current === "working") {
-        peekShownRef.current = false;
-        void invoke("hide_window");
-      }
-    }, PEEK_MAX_MS);
-  }
-
-  function hidePeek() {
-    clearHoldTimer();
-    clearPeekHideTimer();
-    if (!peekShownRef.current) return;
-    peekShownRef.current = false;
-    // Nur verstecken, wenn der Run noch laeuft — done-summary etc.
-    // gehoert dem normalen Flow (wird dort gezeigt/gemorpht).
-    if (phaseRef.current === "working") void invoke("hide_window");
-  }
-
-  useEffect(() => {
-    wireShortcuts({
-      onToggle: () => {
-        if (detailOpenRef.current) {
-          closeOverlay();
-          return;
-        }
-        if (questionRef.current) return;
-        const p = phaseRef.current;
-        if (p === "idle" || p === "error") startListening();
-        else if (p === "arming" || p === "listening") stopListeningAndRun();
-        else if (p === "working") {
-          // Kein sofortiges Show mehr — nur Peek-Timer armen.
-          // (Altes "press = re-show" ist durch Hold-to-Peek ersetzt.)
-          if (holdTimerRef.current == null) {
-            holdTimerRef.current = window.setTimeout(showPeek, HOLD_TO_PEEK_MS);
-          }
-        } else if (p === "done") {
-          // Single vs. Doppel-Tap entwirren: Erster Tap wartet
-          // DONE_DOUBLE_TAP_MS — folgt ein zweiter, oeffnet das grosse
-          // Results-Panel, sonst normaler Reset (Pill zu).
-          const now = Date.now();
-          if (now - lastDoneTap.current < DONE_DOUBLE_TAP_MS) {
-            if (doneTapTimer.current != null) {
-              window.clearTimeout(doneTapTimer.current);
-              doneTapTimer.current = null;
-            }
-            lastDoneTap.current = 0;
-            log("[island] Doppel-Tap: Results-Panel oeffnen.");
-            openDetail();
-          } else {
-            lastDoneTap.current = now;
-            doneTapTimer.current = window.setTimeout(() => {
-              doneTapTimer.current = null;
-              if (phaseRef.current === "done") reset();
-            }, DONE_DOUBLE_TAP_MS);
-          }
-        }
-        // transcribing: ignorieren
-      },
-      onRelease: () => {
-        // Hold abgebrochen bzw. beendet: Timer weg, ggf. Peek verstecken.
-        clearHoldTimer();
-        hidePeek();
-      },
-      onCancel: () => {
-        hidePeek(); // Peek-Flag weg (Sichtbarkeit regeln die Zweige unten)
-        if (recentChatsOpenRef.current) {
-          dismissRecentChats();
-          return;
-        }
-        if (detailOpenRef.current) {
-          closeOverlay();
-          return;
-        }
-        const now = Date.now();
-        const isDouble = now - lastEsc.current < 400;
-        lastEsc.current = now;
-        if (questionRef.current) {
-          answerQuestion("");
-          if (isDouble) cancel();
-          return;
-        }
-        if (isDouble) {
-          cancel(); // zu + Task killen
-          return;
-        }
-        // Einmal: Pill schliessen, egal welche Groesse.
-        const p = phaseRef.current;
-        if (p === "working")
-          hidePill(); // Task laeuft weiter, Ende zeigt sich wieder
-        else cancel(); // listening/transcribing/done: verwerfen + zu
-      },
-    });
-    return () => {
-      clearHoldTimer();
-      clearPeekHideTimer();
-    };
-  }, []);
+  usePillShortcuts({
+    phaseRef,
+    questionRef,
+    detailOpenRef,
+    recentChatsOpenRef,
+    pillDimensions,
+    closeOverlay,
+    dismissRecentChats,
+  });
 
   // Sichtbarkeit + Fenster-Morph. Ambient-Regel: Das Fenster ist fast
   // immer unsichtbar. Sichtbar nur: Voice (listening/transcribing),
@@ -664,12 +527,31 @@ export default function App() {
       phase === "transcribing" ||
       phase === "error"
     ) {
-      const animate = phase !== "arming" && view !== null && !(
-        phase === "error" && window.matchMedia("(prefers-reduced-motion: reduce)").matches
-      );
+      const animate =
+        phase !== "arming" &&
+        view !== null &&
+        !(
+          phase === "error" &&
+          window.matchMedia("(prefers-reduced-motion: reduce)").matches
+        );
       void presentWindow({ width: statusPillWidth, height: PILL_H }, animate);
     }
-  }, [phase, view, question, detailOpen, flash, committing, statusPillWidth, recentChatsOpen, PILL_W, PILL_H, PILL_ICON_W, notch.height, PILL_HEIGHT, questionWidth]);
+  }, [
+    phase,
+    view,
+    question,
+    detailOpen,
+    flash,
+    committing,
+    statusPillWidth,
+    recentChatsOpen,
+    PILL_W,
+    PILL_H,
+    PILL_ICON_W,
+    notch.height,
+    PILL_HEIGHT,
+    questionWidth,
+  ]);
 
   // Auto-Collapse: Antwort ungelesen liegen lassen ist nicht Ambient —
   // nach einigen Sekunden zurueck zu Idle. Pausiert bei offenem Overlay
@@ -747,80 +629,20 @@ export default function App() {
   // bleibt unsichtbar, obwohl der Sound schon lief.
   if (recentChatsOpen) {
     return (
-      <main className="recent-chats-dialog" style={{ width: "100%", height: "100%", padding: 0, background: "#101010", userSelect: "none", WebkitUserSelect: "none" }}>
-        <section
-          aria-label="Recent chats"
-          style={{
-            width: "100%",
-            height: "100%",
-            boxSizing: "border-box",
-            display: "flex",
-            flexDirection: "column",
-            overflow: "hidden",
-            padding: `${18 + notch.height}px 16px 12px`,
-            background: "#101010",
-            color: "#eee",
-            fontFamily: "Geist, sans-serif",
-            userSelect: "none",
-            WebkitUserSelect: "none",
-          }}
-        >
-          <header style={{ display: "flex", flexShrink: 0, alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-            <span style={{ fontSize: 14, fontWeight: 600 }}>Recent chats</span>
-            <button
-              aria-label="Close recent chats"
-              onClick={dismissRecentChats}
-              style={{ border: 0, background: "transparent", color: "#888", fontSize: 18, lineHeight: 1, cursor: "pointer" }}
-            >×</button>
-          </header>
-          {recentChatItems.length ? (
-            <div style={{ display: "grid", gap: 3, flex: 1, minHeight: 0, overflowY: "auto", alignContent: "start", overscrollBehavior: "contain" }}>
-              {recentChatItems.map((chat) => (
-                <ContextMenu key={chat.id}>
-                  <ContextMenuTrigger asChild>
-                <button
-                  onClick={() => {
-                    if (!openRecentChat(chat.id)) return;
-                    returnToRecentChatsRef.current = true;
-                    setRecentChatsOpen(false);
-                  }}
-                  className="recent-chat-item"
-                  style={{
-                    width: "100%",
-                    border: 0,
-                    borderRadius: 12,
-                    padding: "10px 11px",
-                    color: "inherit",
-                    textAlign: "left",
-                    cursor: "pointer",
-                    display: "grid",
-                    gap: 3,
-                  }}
-                >
-                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 13, fontWeight: 500 }}>{chat.title}</span>
-                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 11, color: "#888" }}>{chat.transcript || chat.answer}</span>
-                </button>
-                  </ContextMenuTrigger>
-                  <ContextMenuContent className="recent-context-menu">
-                    <ContextMenuItem
-                      variant="destructive"
-                      onSelect={() => {
-                        deleteRecentChat(chat.id);
-                        setRecentChatItems(recentChats());
-                      }}
-                    >
-                      <Trash2 size={14} />
-                      Delete chat
-                    </ContextMenuItem>
-                  </ContextMenuContent>
-                </ContextMenu>
-              ))}
-            </div>
-          ) : (
-            <div style={{ padding: "28px 8px", color: "#888", textAlign: "center", fontSize: 12 }}>No recent chats yet</div>
-          )}
-        </section>
-      </main>
+      <RecentChatsDialog
+        items={recentChatItems}
+        notchHeight={notch.height}
+        onClose={dismissRecentChats}
+        onOpen={(id) => {
+          if (!openRecentChat(id)) return;
+          returnToRecentChatsRef.current = true;
+          setRecentChatsOpen(false);
+        }}
+        onDelete={(id) => {
+          deleteRecentChat(id);
+          setRecentChatItems(recentChats());
+        }}
+      />
     );
   }
   if (view === null && !question) return null;
@@ -842,9 +664,18 @@ export default function App() {
         justifyContent: "center",
         overflow: "hidden",
         background: notched ? "black" : "transparent",
-        borderRadius: notched ? `0 0 ${detailOpen ? 24 : 12}px ${detailOpen ? 24 : 12}px` : undefined,
-        transition: notched && !window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "border-radius 240ms cubic-bezier(0.23, 1, 0.32, 1)" : undefined,
-        cursor: phase === "done" && (answer || detail) && !detailOpen ? "pointer" : "default",
+        borderRadius: notched
+          ? `0 0 ${detailOpen ? 24 : 12}px ${detailOpen ? 24 : 12}px`
+          : undefined,
+        transition:
+          notched &&
+          !window.matchMedia("(prefers-reduced-motion: reduce)").matches
+            ? "border-radius 240ms cubic-bezier(0.23, 1, 0.32, 1)"
+            : undefined,
+        cursor:
+          phase === "done" && (answer || detail) && !detailOpen
+            ? "pointer"
+            : "default",
       }}
     >
       <motion.div
@@ -857,14 +688,18 @@ export default function App() {
           height: heightSpring,
           // Status follows the SVG; questions use a complete card behind their controls.
           overflow: "hidden",
-          ...(isBig ? { background: "#0b0b0b", borderRadius: "0 0 24px 24px" } : {}),
+          ...(isBig
+            ? { background: "#0b0b0b", borderRadius: "0 0 24px 24px" }
+            : {}),
         }}
       >
-        {!isBig && !notched && <IslandShape
-          variant={!isBig || flashActive ? "pill" : "panel"}
-          pillWidth={flashActive ? PILL_ICON_W : statusPillWidth}
-          notched={notched}
-        />}
+        {!isBig && !notched && (
+          <IslandShape
+            variant={!isBig || flashActive ? "pill" : "panel"}
+            pillWidth={flashActive ? PILL_ICON_W : statusPillWidth}
+            notched={notched}
+          />
+        )}
 
         {/* Text-Layer: beide States kurz gleichzeitig gemountet, damit
             exit/enter tatsaechlich uebereinander animieren koennen statt
@@ -912,13 +747,34 @@ export default function App() {
                   >
                     {
                       [
-                        <span key="listening" style={{ transform: notched ? "translateX(18px)" : "translateX(3px)" }}>
+                        <span
+                          key="listening"
+                          style={{
+                            transform: notched
+                              ? "translateX(18px)"
+                              : "translateX(3px)",
+                          }}
+                        >
                           <Shimmer>Listening...</Shimmer>
                         </span>,
-                        <span key="transcribing" style={{ transform: notched ? "translateX(18px)" : "translateX(3px)" }}>
+                        <span
+                          key="transcribing"
+                          style={{
+                            transform: notched
+                              ? "translateX(18px)"
+                              : "translateX(3px)",
+                          }}
+                        >
                           <Shimmer>Transcribing...</Shimmer>
                         </span>,
-                        <span key="running" style={{ transform: notched ? "translateX(8px)" : "translateX(-7px)" }}>
+                        <span
+                          key="running"
+                          style={{
+                            transform: notched
+                              ? "translateX(8px)"
+                              : "translateX(-7px)",
+                          }}
+                        >
                           <Shimmer>Running...</Shimmer>
                         </span>,
                         <Shimmer key="planning">Planning...</Shimmer>,
@@ -929,7 +785,9 @@ export default function App() {
                             alignItems: "center",
                             gap: 2,
                             margin: notched ? 0 : "0px 0px 0px 10px",
-                            transform: notched ? "translateX(8px)" : "translateX(5px)",
+                            transform: notched
+                              ? "translateX(8px)"
+                              : "translateX(5px)",
                           }}
                         >
                           <Shimmer>{agentsRunningText}</Shimmer>
@@ -1027,7 +885,11 @@ export default function App() {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -8 }}
                 transition={{ duration: 0.18, ease: "easeOut", delay: 0.06 }}
-                style={{ position: "absolute", inset: 0, paddingTop: notch.height }}
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  paddingTop: notch.height,
+                }}
               >
                 <QuestionPanel
                   key={question.text}
@@ -1045,115 +907,18 @@ export default function App() {
       {/* Wide results scoop; clicking outside closes it. */}
       <AnimatePresence>
         {detailOpen && (detail || answer) && (
-          <>
-            <motion.div
-              key="results-catcher"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.15, ease: "easeOut" }}
-              onClick={closeOverlay}
-              className="absolute inset-0 z-10"
-            />
-            <motion.div
-              key="results-scoop"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.22, ease: "easeOut" }}
-              className="absolute inset-0 z-20"
-              style={{ pointerEvents: "none" }}
-            >
-              <IslandShape variant="results" notched={notched} style={notched ? { opacity: 0 } : undefined} />
-              <div
-                className="agent-detail absolute inset-0"
-                style={{ paddingTop: 24 + notch.height, paddingInline: notched ? 32 : "10%" }}
-                data-revealed={resultsRevealed}
-                data-skeleton-ready={skeletonReady}
-                aria-busy={!resultsRevealed}
-              >
-                <header className="results-header">
-                  <div className="results-meta">
-                    <DotmSquare11
-                      size={24}
-                      dotSize={2.5}
-                      cellPadding={1.1}
-                      color="#a6a6a6"
-                      animated={false}
-                    />
-                    <span>{workedLabel}</span>
-                    {tasks.length > 0 && (
-                      <>
-                        <span className="results-dot" aria-hidden="true">
-                          ·
-                        </span>
-                        <span>
-                          {tasks.length}{" "}
-                          {tasks.length === 1 ? "Agent" : "Agents"} used
-                        </span>
-                      </>
-                    )}
-                  </div>
-                  <button
-                    className="results-copy-button"
-                    type="button"
-                    onClick={async () => {
-                      try {
-                        await navigator.clipboard.writeText(resultMarkdown);
-                        setCopyStatus("copied");
-                      } catch {
-                        setCopyStatus("error");
-                      }
-                    }}
-                    aria-label={
-                      copyStatus === "copied"
-                        ? "Result copied"
-                        : "Copy result as Markdown"
-                    }
-                    title="Copy result as Markdown"
-                  >
-                    {copyStatus === "copied" ? (
-                      <Check size={14} />
-                    ) : (
-                      <Copy size={14} />
-                    )}
-                    <span aria-live="polite">
-                      {copyStatus === "copied"
-                        ? "Copied"
-                        : copyStatus === "error"
-                          ? "Try again"
-                          : "Copy"}
-                    </span>
-                  </button>
-                </header>
-                <div className="results-scroll">
-                  <div className="results-skeleton" aria-hidden="true">
-                    {Array.from({ length: skeletonLineCount }, (_, index) => (
-                      <span
-                        key={index}
-                        style={{
-                          width:
-                            index === skeletonLineCount - 1
-                              ? `${Math.max(32, Math.min(96, (resultMarkdown.length % 90 || 90) / 90 * 100))}%`
-                              : `${[96, 84, 92, 76][index % 4]}%`,
-                        }}
-                      />
-                    ))}
-                  </div>
-                  <div className="results-copy">
-                    {transcript.trim() && (
-                      <div className="results-request">
-                        <span>Your request</span>
-                        <p>{transcript.trim()}</p>
-                      </div>
-                    )}
-                    <Markdown text={resultMarkdown} />
-                  </div>
-                </div>
-                <div className="results-fade" aria-hidden="true" />
-              </div>
-            </motion.div>
-          </>
+          <ResultsPanel
+            detail={detail}
+            answer={answer}
+            transcript={transcript}
+            totalMs={totalMs}
+            tasks={tasks}
+            notched={notched}
+            notchHeight={notch.height}
+            resultsRevealed={resultsRevealed}
+            skeletonReady={skeletonReady}
+            onClose={closeOverlay}
+          />
         )}
       </AnimatePresence>
     </main>

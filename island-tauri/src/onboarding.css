@@ -758,33 +758,27 @@ html:has(.onboarding) #root {
 .ob-model-picker {
   position: relative;
   min-width: 0;
+  width: 100%;
+  max-width: 400px;
 }
 .ob-model-trigger {
   width: 100%;
+  min-height: 44px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  padding: 14px;
+  gap: 12px;
+  padding: 10px 13px;
   color: #ddd;
   background: #171717;
   border: 1px solid #303030;
   border-radius: 10px;
   text-align: left;
+  font-size: 12px;
 }
-.ob-model-summary {
-  display: grid;
-  gap: 6px;
-  flex: 1;
-  min-width: 0;
-}
-.ob-model-summary small,
-.ob-model-options small {
-  color: #888;
-  font-size: 10px;
-  line-height: 1.4;
-  font-weight: 400;
-}
+.ob-model-trigger > svg { flex-shrink: 0; color: #777; }
+.ob-model-trigger[aria-expanded="true"] { border-color: #555; }
+.ob-model-summary { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ob-model-options {
   position: absolute;
   z-index: 30;
@@ -795,77 +789,45 @@ html:has(.onboarding) #root {
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 5px;
-  background: #1b1b1b;
+  background: #191919;
   border: 1px solid #333;
   border-radius: 12px;
-  box-shadow: 0 10px 25px #0006;
+  box-shadow: 0 8px 24px #0005;
   transform-origin: bottom center;
 }
+.ob-model-menu-heading,
 .ob-model-options button {
   display: grid;
-  gap: 5px;
+  grid-template-columns: minmax(0, 1fr) 112px 14px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+}
+.ob-model-menu-heading { height: 28px; color: #777; font-size: 9px; }
+.ob-model-columns,
+.ob-model-bars { display: grid; grid-template-columns: repeat(3, 32px); gap: 8px; }
+.ob-model-columns { text-align: center; }
+.ob-model-options button {
   width: 100%;
-  padding: 12px 10px;
+  min-height: 38px;
   text-align: left;
   border: 0;
-  border-radius: 8px;
+  border-radius: 7px;
   background: transparent;
-  color: #ddd;
+  color: #bbb;
+  transition: background-color 120ms ease, color 120ms ease;
 }
-.ob-model-options button:focus-visible {
-  background: #303030;
-  outline-offset: -2px;
-}
+.ob-model-options button:focus-visible { background: #292929; outline-offset: -2px; }
 @media (hover: hover) and (pointer: fine) {
-  .ob-model-options button:hover {
-    background: #292929;
-  }
+  .ob-model-options button:hover { background: #242424; color: #eee; }
 }
-.ob-model-options button[aria-selected="true"] {
-  background: #252525;
-}
-.ob-model-name {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  font-size: 12px;
-}
-.ob-model-bars {
-  display: grid;
-  gap: 9px;
-  margin: 8px 0 4px;
-}
-.ob-model-metric {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 100px;
-  align-items: center;
-  gap: 22px;
-}
-.ob-model-metric-label {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 12px;
-  color: #999;
-  font-size: 10px;
-  font-weight: 400;
-}
-.ob-model-metric-label small {
-  color: #c0c0c0;
-}
-.ob-model-track {
-  display: block;
-  height: 3px;
-  background: #343434;
-  border-radius: 10px;
-  overflow: hidden;
-}
-.ob-model-track i {
-  display: block;
-  height: 100%;
-  background: #bababa;
-  border-radius: inherit;
-}
+.ob-model-options button[aria-selected="true"] { background: #ffffff09; color: #eee; }
+.ob-model-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
+.ob-model-meter { display: flex; align-items: center; justify-content: center; gap: 2px; height: 16px; }
+.ob-model-meter i { width: 4px; height: 7px; border-radius: 1px; background: #383838; }
+.ob-model-meter i[data-filled="true"] { background: #999; }
+.ob-model-options button[aria-selected="true"] .ob-model-meter i[data-filled="true"] { background: #ddd; }
+.ob-model-check { display: flex; align-items: center; justify-content: center; }
 .ob-model-pricing {
   margin: -8px 0 0;
   color: #777;
