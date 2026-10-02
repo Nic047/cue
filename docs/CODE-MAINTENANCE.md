@@ -2,7 +2,7 @@
 
 ## Scope
 
-Focused refactoring, with the current UI markup, classes, sizing and animations preserved. No framework or interface layer was added. This work is on the local branch `codex/code-maintenance`; it has not been pushed or bundled into a new website download.
+Focused refactoring, with the current UI markup, classes, sizing and animations preserved. No framework or interface layer was added. This work is on the local branch `codex/code-maintenance`; it is included in the Cue 0.1.4 installer published to the website. The source refactor commits remain local.
 
 ## Module map
 
@@ -45,4 +45,4 @@ cargo fmt --manifest-path island-tauri/src-tauri/Cargo.toml --check
 
 The refactor is split into agent/protocol/timeout, native window separation, UI extraction, and this handover note. Each commit describes the problem, change, and checks.
 
-The checkout already contained documentation, CI, release metadata and landing-page changes, plus independent Swift workflow experiments. Those remain outside these refactor commits. Review or commit them separately before merging or publishing; do not stage the entire checkout blindly. The live download remains Cue 0.1.3 from the preceding release.
+The checkout already contained documentation, CI, release metadata and landing-page changes, plus independent Swift workflow experiments. Those remain outside these refactor commits. Review or commit them separately before merging or publishing; do not stage the entire checkout blindly. The website download is Cue 0.1.4, including this refactor.

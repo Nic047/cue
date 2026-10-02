@@ -1,4 +1,4 @@
-const filename = 'Cue-0.1.2-apple-silicon.dmg';
+const filename = 'Cue-0.1.4-apple-silicon.dmg';
 const download = '/downloads/' + filename;
 const validWebsiteId = (value) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value || '');
 
@@ -16,12 +16,7 @@ function trackInstallerRequest(ctx, websiteId, hostname) {
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
-    if (url.pathname !== download) {
-      const response = await env.ASSETS.fetch(request);
-      if (request.method !== 'GET' || !response.headers.get('content-type')?.includes('text/html') || !validWebsiteId(env.UMAMI_WEBSITE_ID)) return response;
-      const script = `<script defer src="https://cloud.umami.is/script.js" data-website-id="${env.UMAMI_WEBSITE_ID}" data-domains="trycue.lol" data-do-not-track="true" data-exclude-search="true"></script>`;
-      return new HTMLRewriter().on('head', { element: (head) => head.append(script, { html: true }) }).transform(response);
-    }
+    if (url.pathname !== download) return env.ASSETS.fetch(request);
     if (!['GET', 'HEAD'].includes(request.method)) return new Response('Method not allowed', { status: 405, headers: { Allow: 'GET, HEAD' } });
     try {
       const object = request.method === 'HEAD' ? await env.BUCKET.head(filename) : await env.BUCKET.get(filename, { range: request.headers });
