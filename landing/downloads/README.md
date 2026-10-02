@@ -1,8 +1,10 @@
 # Cue alpha download
 
-Current installer: https://trycue.lol/downloads/Cue-0.1.4-apple-silicon.dmg
+Current installer: https://trycue.lol/downloads/Cue-0.1.5-apple-silicon.dmg
 
-Size: 52,943,104 bytes. SHA-256: `31d2f8913d192979e807a71fc5720014dd893c66a7ebbe137fef3d24d2f068e7`.
+Size: 52,942,055 bytes. SHA-256: `126662bdf4cc97c14948375684321f2a8e1c1811a67db06a8e666c266594bfdd`.
+
+Version 0.1.5 opens pending onboarding after application startup, checks current permissions as well as saved setup, and restores dismissed setup when Cue is reopened. The download notice explains the manual macOS Open Anyway step and remains visible until dismissed. Build, sealed app signatures, and DMG checksum verified; GUI first-launch behavior still needs a user check.
 
 Version 0.1.4 includes the UI/backend responsibility refactor, validated shared event protocol, and corrected timeout cleanup. The packaged sidecar starts outside the repository; app version, signatures, and DMG checksum verified.
 
