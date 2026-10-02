@@ -12,6 +12,8 @@ const dmg = config.bundle.macOS.dmg;
 const background = join(root, 'island-tauri/src-tauri', dmg.background);
 const output = join(root, `landing/downloads/Cue-${version}-apple-silicon.dmg`);
 if (process.platform !== 'darwin') throw new Error('Package on macOS.');
+const appVersion = execFileSync('/usr/libexec/PlistBuddy', ['-c', 'Print :CFBundleShortVersionString', join(app, 'Contents/Info.plist')], { encoding: 'utf8' }).trim();
+if (appVersion !== version) throw new Error(`App version ${appVersion} differs from installer version ${version}; rebuild the app before packaging.`);
 const run = (command, args) => execFileSync(command, args, { stdio: 'inherit' });
 // Ad hoc signing fixes integrity; it does not provide notarization or Developer ID trust.
 if (!process.argv.includes('--installer-only')) {
