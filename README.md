@@ -16,7 +16,7 @@ Cue is an early alpha for evaluation. It currently supports Apple Silicon Macs a
 - Run browser and sandbox work in parallel while Cue stays in the menu bar.
 - Review the result, task details, and recent chats in a compact panel.
 
-Agent access depends on the tools and permissions you grant. Cue does not submit forms, make purchases, or change accounts as part of its current browser workflow.
+Browser agents use separate cloud sessions, not your signed-in local browser. Their instructions prohibit purchases, account changes, and form submissions other than public searches. These are model instructions, not a technical guarantee: browser tools can interact with pages. See [Security boundaries](SECURITY.md#security-boundaries).
 
 ## Install
 
@@ -52,14 +52,17 @@ The app is created under `island-tauri/src-tauri/target/release/bundle/macos/`; 
 
 ## Providers and privacy
 
-Cue stores app credentials in the macOS Keychain. Voice audio is sent to Groq for transcription; the resulting prompt and task context are processed by the configured agent and model providers. A task may also send relevant page content to the tools it uses. Review the policies of the providers you configure and avoid using sensitive data in this alpha.
+Cue stores app credentials in the macOS Keychain. Voice audio is sent to Groq for transcription; the resulting prompt and task context are processed by the configured agent and model providers. A task may also send relevant page content to the tools it uses. Recent chats are stored locally in WebView storage; exported files stay in `~/Downloads/Cue` until you remove them. Terminal logs may contain task content and URLs. Sandbox preview links are public and expire ten minutes after completion. Review your providers’ policies and avoid sensitive data in this alpha.
 
 ## Repository layout
 
 - `island-tauri/` — macOS app and UI
 - `orchestrator.ts`, `browser-tools.ts`, `sandbox-tools.ts` — task orchestration and agent tools
+- `agent/`, `shared/` — planning, execution, result synthesis, and validated events
 - `scripts/` — packaging and local checks
 - `landing/` — download site source and download worker
+
+See [Architecture](docs/CODE-MAINTENANCE.md) for the runtime flow and module map.
 
 ## Contributing
 
@@ -71,4 +74,4 @@ Please report suspected vulnerabilities privately. See [SECURITY.md](SECURITY.md
 
 ## License
 
-Cue is licensed under the [MIT License](LICENSE).
+Cue is licensed under the [MIT License](LICENSE). Bundled Geist fonts use the [SIL Open Font License](island-tauri/public/OFL-Geist.txt); dependencies retain their respective licenses.
