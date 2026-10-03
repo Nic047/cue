@@ -2,15 +2,7 @@ import {
   waitWithTimeout,
   WaitTimeoutError,
 } from "./shared/wait-with-timeout.js";
-/**
- * Generische Sandbox-Tools für den Agenten.
- * Läuft auf @solarisdk/sandbox (microVM, snapshot-basiert).
- *
- * WICHTIG (Doku: https://docs.getsolari.com/sandboxes):
- * - commands.run(cmd, { args }) ist NICHT shell-interpretiert.
- *   Für Shell-Syntax (Pipes, &&, Globbing) explizit run_shell (sh -c) nutzen.
- * - kill(), nicht close(), beendet die VM.
- */
+/** Remote sandbox tools. commands.run uses literal arguments; run_shell explicitly uses sh -c. Stop VMs with kill(). See https://docs.getsolari.com/sandboxes. */
 import { mkdir, writeFile, rm } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { homedir } from "node:os";
@@ -65,12 +57,12 @@ export function buildSandboxTools(ctx: SandboxToolContext) {
   return {
     run_command: tool({
       description:
-        "Führe eine einzelne Binary mit Argumenten aus (NICHT shell-interpretiert). " +
-        "Für Shell-Syntax nutze run_shell. For persistent servers use background=true; never shell &.",
+        "Run a binary with arguments WITHOUT shell interpretation. " +
+        "Use run_shell for shell syntax. For persistent servers use background=true; never shell &.",
       inputSchema: z.object({
         command: z
           .string()
-          .describe("Name der Binary, z.B. 'python3' oder 'pip'"),
+          .describe("Binary name, such as 'python3' or 'pip'"),
         background: z
           .boolean()
           .default(false)
@@ -80,7 +72,7 @@ export function buildSandboxTools(ctx: SandboxToolContext) {
         args: z
           .array(z.string())
           .default([])
-          .describe("Argumente als Array, z.B. ['install', 'requests']"),
+          .describe("Argument array, such as ['install', 'requests']"),
       }),
       execute: async ({ command, args, background }) =>
         run(
@@ -112,10 +104,10 @@ export function buildSandboxTools(ctx: SandboxToolContext) {
 
     run_shell: tool({
       description:
-        "Führe einen Shell-Befehl aus (Pipes, &&, Globbing erlaubt). " +
-        "Läuft intern über 'sh -c <command>'.",
+        "Run a shell command (pipes, &&, and globbing allowed). " +
+        "Uses 'sh -c <command>' inside the sandbox.",
       inputSchema: z.object({
-        command: z.string().describe("Vollständiger Shell-Befehl als String"),
+        command: z.string().describe("Complete shell command string"),
       }),
       execute: async ({ command }) =>
         run(
@@ -137,11 +129,11 @@ export function buildSandboxTools(ctx: SandboxToolContext) {
 
     write_file: tool({
       description:
-        "Schreibe Text in eine Datei in der Sandbox (überschreibt, falls sie existiert).",
+        "Write a text file inside the sandbox, replacing existing contents.",
       inputSchema: z.object({
         path: z
           .string()
-          .describe("Absoluter oder relativer Pfad in der Sandbox"),
+          .describe("Absolute or relative sandbox path"),
         content: z.string(),
       }),
       execute: async ({ path, content }) =>
@@ -156,7 +148,7 @@ export function buildSandboxTools(ctx: SandboxToolContext) {
     }),
 
     read_file: tool({
-      description: "Lies den Inhalt einer Datei aus der Sandbox.",
+      description: "Read a sandbox file.",
       inputSchema: z.object({ path: z.string() }),
       execute: async ({ path }) =>
         run(
@@ -170,7 +162,7 @@ export function buildSandboxTools(ctx: SandboxToolContext) {
     }),
 
     list_dir: tool({
-      description: "Liste Dateien/Ordner in einem Verzeichnis der Sandbox auf.",
+      description: "List a sandbox directory.",
       inputSchema: z.object({ path: z.string().default(".") }),
       execute: async ({ path }) =>
         run(
@@ -192,8 +184,8 @@ export function buildSandboxTools(ctx: SandboxToolContext) {
 
     install_package: tool({
       description:
-        "Installiere ein Paket (pip oder npm, je nach 'manager'). Nutze das " +
-        "VOR dem ersten Ausführen von Code, der externe Pakete importiert.",
+        "Install a pip or npm package using the selected manager. Do this " +
+        "BEFORE running code that imports external packages.",
       inputSchema: z.object({
         manager: z.enum(["pip", "npm"]),
         packageName: z.string(),
@@ -249,8 +241,8 @@ export function buildSandboxTools(ctx: SandboxToolContext) {
 
     expose_port: tool({
       description:
-        "Mache einen laufenden Server (z.B. auf Port 3000) über eine öffentliche " +
-        "Preview-URL erreichbar. Nutze das, nachdem du einen Server/Dienst gestartet hast.",
+        "Expose a running server (for example on port 3000) using a public " +
+        "preview URL. Use after starting the server.",
       inputSchema: z.object({ port: z.number().int().min(1).max(65535) }),
       execute: async ({ port }) =>
         run(

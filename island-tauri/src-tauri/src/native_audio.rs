@@ -95,7 +95,7 @@ fn audio_worker(
             AudioCommand::Stop(reply) => {
                 let result = active
                     .take()
-                    .ok_or_else(|| "Keine Aufnahme aktiv.".to_string())
+                    .ok_or_else(|| "No recording is active.".to_string())
                     .and_then(finish_capture);
                 let _ = reply.send(result);
                 level.store(0, Ordering::Relaxed);
@@ -154,7 +154,7 @@ fn start_capture(
     monitor: bool,
 ) -> Result<String, String> {
     if active.is_some() {
-        return Err("Eine Aufnahme läuft bereits.".into());
+        return Err("A recording is already active.".into());
     }
     let started = Instant::now();
     let host = cpal::default_host();
@@ -165,11 +165,11 @@ fn start_capture(
     } else {
         host.default_input_device()
     }
-    .ok_or_else(|| "Kein Standardmikrofon verfügbar.".to_string())?;
-    let device_name = device.name().unwrap_or_else(|_| "Mikrofon".into());
+    .ok_or_else(|| "No selected or default microphone is available.".to_string())?;
+    let device_name = device.name().unwrap_or_else(|_| "Microphone".into());
     let supported = device
         .default_input_config()
-        .map_err(|e| format!("Mikrofon konnte nicht geöffnet werden: {e}"))?;
+        .map_err(|e| format!("Could not open microphone: {e}"))?;
     let config: cpal::StreamConfig = supported.clone().into();
     let sample_rate = config.sample_rate.0;
     let channels = config.channels;
@@ -255,12 +255,12 @@ fn start_capture(
             error.clone(),
             monitor,
         ),
-        format => return Err(format!("Nicht unterstütztes Mikrofonformat: {format}")),
+        format => return Err(format!("Unsupported microphone format: {format}")),
     }
-    .map_err(|e| format!("Mikrofonstart fehlgeschlagen: {e}"))?;
+    .map_err(|e| format!("Microphone start failed: {e}"))?;
     stream
         .play()
-        .map_err(|e| format!("Mikrofonstart fehlgeschlagen: {e}"))?;
+        .map_err(|e| format!("Microphone start failed: {e}"))?;
 
     *active = Some(ActiveRecording {
         stream,
@@ -272,7 +272,7 @@ fn start_capture(
         monitor,
     });
     eprintln!(
-        "[island] Native Aufnahme bereit in {:?}: {device_name} ({sample_rate}Hz)",
+        "[island] Native recording ready in {:?}: {device_name} ({sample_rate}Hz)",
         started.elapsed()
     );
     Ok(device_name)
@@ -317,16 +317,16 @@ fn finish_capture(recording: ActiveRecording) -> Result<FinishedRecording, Strin
     let mut cursor = Cursor::new(Vec::new());
     {
         let mut writer = hound::WavWriter::new(&mut cursor, spec)
-            .map_err(|e| format!("WAV konnte nicht erstellt werden: {e}"))?;
+            .map_err(|e| format!("Could not create WAV: {e}"))?;
         for sample in resampled {
             let pcm = (sample.clamp(-1.0, 1.0) * i16::MAX as f32) as i16;
             writer
                 .write_sample(pcm)
-                .map_err(|e| format!("WAV konnte nicht geschrieben werden: {e}"))?;
+                .map_err(|e| format!("Could not write WAV: {e}"))?;
         }
         writer
             .finalize()
-            .map_err(|e| format!("WAV konnte nicht abgeschlossen werden: {e}"))?;
+            .map_err(|e| format!("Could not finalize WAV: {e}"))?;
     }
     drop(samples);
     let data_uri = format!(

@@ -1,18 +1,6 @@
 import type { CSSProperties } from "react";
 
-/**
- * Die Island-Scoop-Form.
- * Wird per preserveAspectRatio="none" auf jede Groesse gestreckt —
- * Pill (220x42) und Panel teilen sich die Form, unterscheiden sich aber
- * in den unteren Ecken:
- * - "panel": engere Radien unten (~55 statt ~79 Einheiten), damit die
- *   Ecken bei Panel-Groesse nicht nach halbem Stadion aussehen.
- * - "pill": leicht runde Radien unten (~60 Einheiten) — etwas weicher
- *   als die vorige enge Variante, aber weit weg von den alten 79ern.
- * Oben bleibt der Path in beiden Varianten exakt gleich, damit die
- * Kante buendig mit der Notch-Leiste andockt.
- * Schatten via CSS `drop-shadow` auf dem SVG: folgt exakt dem Alpha-Pfad.
- */
+/** Shared scoop shape with tighter panel corners; the top edge stays aligned with the notch. */
 const PANEL_PATH =
   "M0 0C33.14 0 60 26.86 60 60V103C60 133 76 158 108 158H340C372 158 388 133 388 103V60C388 26.86 414.86 0 448 0H0Z";
 

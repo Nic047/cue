@@ -71,6 +71,23 @@ const browserTools = buildBrowserTools({
 assert.equal((await (browserTools.read_page.execute as any)({ maxChars: 100, offset: 0, waitForNetworkIdle: false }, {})).ok, true);
 assert.equal(browserOk, true);
 console.log('Browser read result and progress event agree.');
+let navigationCalls = 0;
+const navigationTools = buildBrowserTools({
+  page: {
+    goto: async () => { navigationCalls++; },
+    title: async () => 'Example', url: () => 'https://example.com',
+  } as any,
+  browser: { contexts: () => { navigationCalls++; throw new Error('Unexpected new tab'); } } as any,
+});
+for (const url of ['file:///etc/passwd', 'javascript:alert(1)', 'data:text/html,hello', 'https://user:secret@example.com', 'not a URL', '']) {
+  for (const name of ['navigate', 'new_tab'] as const) {
+    assert.equal((await (navigationTools[name].execute as any)({ url, waitUntil: 'domcontentloaded' }, {})).ok, false);
+  }
+}
+assert.equal(navigationCalls, 0, 'Invalid URLs must not reach the browser');
+assert.equal((await (navigationTools.navigate.execute as any)({ url: 'https://example.com', waitUntil: 'domcontentloaded' }, {})).ok, true);
+assert.equal(navigationCalls, 1);
+console.log('Browser navigation rejects unsafe schemes and embedded credentials before opening a page.');
 let waiting = false;
 const processTools = buildSandboxTools({ sandbox: { commands: {
   start: async () => ({ cmdId: 'server-1', wait: () => { waiting = true; return Promise.reject(new Error('channel closed')); } }),

@@ -25,9 +25,9 @@ import { DotmSquare8 } from "./components/ui/dotm-square-8";
 import { IslandShape } from "./components/ui/island-shape";
 import { Shimmer } from "./components/ui/shimmer-text";
 
-// Feste Breite fuer alle Text-Zustaende; nur der leere Start-Flash ist schmal.
+// Text states share a width; the empty start flash is narrower.
 export const PILL_W = 230;
-export const PILL_H = 42; // nur Voice-Pill + Start-Flash (Ausnahmen, s.u.)
+export const PILL_H = 42; // Compact voice pill and startup flash.
 const MAX_ERROR_PILL_W = 480;
 
 const ICON_SIZE = 20;
@@ -36,12 +36,11 @@ export const PILL_HEIGHT = 400; // DIE fixe Hoehe aller Status-Zustaende
 // Detail-Overlay: fallback size when monitor dimensions are unavailable.
 export const OVERLAY_W = 1100;
 export const OVERLAY_H = 540;
-// Pill kollabiert nach Antwort von selbst zurück (ausser Overlay offen).
+// Collapse completed results unless the detail overlay is open.
 const DONE_COLLAPSE_MS = 10_000;
-// Start-Flash: winziger Scoop-Blip bei Task-Start, dann Stille.
+// Brief empty flash when a task starts.
 const FLASH_MS = 700;
-// Hold-to-Peek: Option 1.5s halten => Status einblenden; loslassen (oder
-// spaetestens nach 5s) => wieder verstecken.
+// Hold the shortcut to peek; release or the safety timeout hides it.
 
 const RECENT_CHATS_W = 420;
 const RECENT_CHATS_H = 380;
@@ -53,8 +52,7 @@ function presentWindow(
   return invoke("show_window", { ...size, animate });
 }
 
-// Gemeinsame Zeile fuer alle Pill-States: Icon bleibt fest, jeder Text wird
-// im gleichen Bereich zwischen Icon und rechter Pill-Kante zentriert.
+// Keep the icon fixed and center status text in the remaining space.
 function PillRow({
   icon,
   children,
@@ -186,19 +184,19 @@ export default function App() {
   useEffect(() => {
     phaseRef.current = phase;
   }, [phase]);
-  // Frage-Spiegel für Shortcut-Handler (einmal verdrahtet).
+  // Mirror the question for the persistent shortcut handlers.
   const questionRef = useRef(question);
   useEffect(() => {
     questionRef.current = question;
   }, [question]);
-  // Overlay-Spiegel + Schliessen (stellt Pill-Groesse wieder her).
+  // Mirror overlay state and restore pill size on close.
   const detailOpenRef = useRef(detailOpen);
   useEffect(() => {
     detailOpenRef.current = detailOpen;
   }, [detailOpen]);
   function restorePillSize() {
     if (phaseRef.current === "done") {
-      // Zurueck auf kleine Pill (Done = "Results ready", kein Panel).
+      // Return to the compact results-ready pill.
       void presentWindow(pillDimensions.current, true);
     } else {
       void invoke("hide_window");
@@ -216,8 +214,7 @@ export default function App() {
     restorePillSize();
   }
 
-  // Angezeigte Ansicht: Pill fuer alles ausser Frage-Dialog (Done ist
-  // seit "Results ready" ebenfalls nur noch die kleine Pill).
+  // Only questions use the expanded dialog here.
   const [view, setView] = useState<"pill" | "panel" | null>(null);
   const [recentChatsOpen, setRecentChatsOpen] = useState(false);
   const recentChatsOpenRef = useRef(recentChatsOpen);
@@ -287,23 +284,14 @@ export default function App() {
     setView("pill");
   }, [phase]);
 
-  // "Frisch aus idle heraus gemountet" -> KEINE CSS-Transition auf der
-  // ersten Groessenangabe. Vorher: resize_window (Rust, sofort/hart) lief
-  // parallel zu einer CSS-Transition, die noch von einem alten/leeren
-  // Hoehenwert Richtung PILL_H animierte -> kurzer "Stretch"-Frame, bevor
-  // sich beides auf denselben Endwert eingeschwungen hat. Jetzt: beim
-  // Uebergang von view===null zu einem echten View wird die Transition
-  // fuer genau einen Frame deaktiviert, das Div erscheint direkt in
-  // Zielgroesse (deckt sich mit dem harten resize_window), und danach
-  // erst wird Transition wieder aktiv fuer alle folgenden Wechsel.
+  // Disable transitions for the first visible frame to match the native resize and prevent stale-size stretching.
   const wasVisible = useRef(false);
   const [skipEnterTransition, setSkipEnterTransition] = useState(false);
   useEffect(() => {
     const nowVisible = view !== null || question !== null;
     if (nowVisible && !wasVisible.current) {
       setSkipEnterTransition(true);
-      // Naechster Frame: Transition wieder normal einschalten, damit
-      // View-Wechsel danach (pill<->panel) weiterhin animiert sind.
+      // Enable transitions on the next frame for subsequent view changes.
       const raf = requestAnimationFrame(() => setSkipEnterTransition(false));
       wasVisible.current = true;
       return () => cancelAnimationFrame(raf);
@@ -311,17 +299,14 @@ export default function App() {
     wasVisible.current = nowVisible;
   }, [view, question]);
 
-  // Start-Flash: Bei Task-Start blitzt kurz die leere Scoop-Form auf
-  // ("es passiert etwas"), dann wird es wieder still. Waehrend working
-  // bleibt das Fenster sonst versteckt (Status nur per Hold-to-Peek).
+  // Briefly acknowledge startup, then hide background work until the user peeks.
   const [flash, setFlash] = useState(false);
   const flashPrevRef = useRef(phase);
   useEffect(() => {
     const prev = flashPrevRef.current;
     flashPrevRef.current = phase;
     if (phase !== "working") return;
-    // Echte Transkription (transcribing -> working): kein leerer Blip —
-    // der Commit-Flow zeigt stattdessen 1s "Running...".
+    // Voice submission uses the running confirmation instead of an empty flash.
     if (prev === "transcribing") return;
     setFlash(true);
     const t = window.setTimeout(() => {
@@ -334,10 +319,7 @@ export default function App() {
     };
   }, [phase]);
 
-  // Transkriptions-Bestaetigung: Bei Erfolg (transcribing -> working)
-  // zeigt die Pill 1s "Running..." im gleichen Layout und fadet dann aus —
-  // der Nutzer sieht, dass die Transkription ankam. Nur echter Flow (nicht
-  // ?demo — dort wuerde das die UI-Arbeit stoeren).
+  // Show a brief running confirmation after transcription; skip this in the demo harness.
   const [committing, setCommitting] = useState(false);
   const [commitFading, setCommitFading] = useState(false);
   const commitJustStartedRef = useRef(false);
@@ -380,12 +362,7 @@ export default function App() {
     dismissRecentChats,
   });
 
-  // Sichtbarkeit + Fenster-Morph. Ambient-Regel: Das Fenster ist fast
-  // immer unsichtbar. Sichtbar nur: Voice (listening/transcribing),
-  // Frage-Dialog, Start-Flash, Hold-Peek (via showPeek, nicht hier),
-  // Done-Summary und Detail-Overlay. Waehrend working (ohne Flash/Peek)
-  // bleibt es versteckt — der Run laeuft unsichtbar im Hintergrund.
-  // Initial-Oeffnen (aus idle): direkt erscheinen ohne Animation.
+  // Keep background work hidden except during explicit peeks, questions, and completion. Initial presentation snaps to size.
   useEffect(() => {
     if (recentChatsOpen) {
       recentMenuWasOpenRef.current = true;
@@ -410,9 +387,7 @@ export default function App() {
           window.clearTimeout(reveal);
         };
       }
-      // Grosses Results-Panel: aus der Pill per Feder herauswachsen,
-      // oben verankert — kein zentrierter Blur-Pop.
-      // Kein show_overlay mehr (war zentriert + hart gesetzt).
+      // Expand results from the top-anchored pill with a spring.
       let disposed = false;
       let unlisten: (() => void) | undefined;
       let settleTimer: number | undefined;
@@ -448,7 +423,7 @@ export default function App() {
             ));
           }
         } catch {
-          /* Fallback-Groesse unten verwenden. */
+          /* Use the fallback dimensions below. */
         }
         if (disposed) return;
 
@@ -502,13 +477,13 @@ export default function App() {
       return;
     }
     if (flash) {
-      // Start-Flash: winziger Scoop-Blip in Pill-Groesse, kein Inhalt.
+      // The startup flash has no content.
       void presentWindow({ width: PILL_ICON_W, height: PILL_H });
       return;
     }
     if (phase === "working") {
       if (committing || commitJustStartedRef.current) {
-        // Transkriptions-Bestaetigung: Pill mit "Running..." 1s halten.
+        // Keep the running confirmation visible briefly.
         void presentWindow({ width: PILL_W, height: PILL_H });
         return;
       }
@@ -516,8 +491,7 @@ export default function App() {
       return;
     }
     if (phase === "done") {
-      // Done = kleine Pill ("Results ready"), keine Summary direkt.
-      // Wer mehr will, klickt (Detail-Overlay).
+      // Completion initially shows the compact results-ready pill.
       void presentWindow(pillDimensions.current, true);
       return;
     }
@@ -553,9 +527,7 @@ export default function App() {
     questionWidth,
   ]);
 
-  // Auto-Collapse: Antwort ungelesen liegen lassen ist nicht Ambient —
-  // nach einigen Sekunden zurueck zu Idle. Pausiert bei offenem Overlay
-  // und im ?demo-Harness (dort will man in Ruhe auf Done schauen).
+  // Auto-collapse completed results unless details or the demo harness are open.
   useEffect(() => {
     if (IS_DEMO || onboardingActive) return;
     if (phase !== "done" || !answer || detailOpen || recentChatsOpen) return;
@@ -564,18 +536,14 @@ export default function App() {
   }, [phase, answer, detailOpen, recentChatsOpen, onboardingActive]);
 
   const showQuestion = question !== null;
-  // Panel nur noch fuer den Frage-Dialog — Done ist die kleine Pill
-  // ("Results ready"), Working/Voice sowieso.
+  // Only questions use this panel.
   const isBig = showQuestion;
-  // NOCH laufende Agents (done/failed zaehlen raus): Der Executing-Text
-  // zaehlt damit live herunter, bis der letzte Task fertig ist.
+  // Count unfinished tasks for the running indicator.
   const runningAgents = Math.max(
     1,
     tasks.filter((t) => t.status !== "done" && t.status !== "failed").length,
   );
-  // Einzeiliger Pill-Status fuer alle Nicht-Panel-Zustaende.
-  // Index: 0 Listening, 1 Transcribing, 2 Running (Commit),
-  // 3 Planning, 4 N running + elapsed time, 5 capture/transcription error.
+  // Single-line status for compact states.
   const agentsRunningText = `${runningAgents} running`;
   const statusIndex =
     phase === "error"
@@ -589,21 +557,12 @@ export default function App() {
               ? 3
               : 4
           : 0;
-  // Start-Flash zeigt nur die leere Scoop-Form (Ausnahme, falls parallel
-  // eine Frage reinkommt: die geht immer vor).
+  // Questions take priority over the empty startup flash.
   const flashActive = flash && !showQuestion && !committing;
-  // Hoehe: Small-Pill (42) fuer ALLES ausser Frage-Dialog — auch Done
-  // ("Results ready"). Nur die Frage bekommt Panel-Hoehe.
+  // Use compact height except for questions.
   const targetHeight = showQuestion ? PILL_HEIGHT : PILL_H;
 
-  // Echter Spring statt CSS-cubic-bezier, damit man das Overshoot (das
-  // "bisschen Federn") tatsaechlich sieht/spuert, nicht nur eine flache
-  // Ease-Kurve. Werte grob an den Rust-Spring angelehnt (stiffness 170,
-  // damping 24 auf einem 0..1-Fortschritt) - framer-motions Einheiten sind
-  // nicht 1:1 dieselbe Physik-Formel, daher hier nach Gefuehl nachjustiert
-  // auf denselben Charakter (schnell, ein Hauch Ueberschwingen, kein
-  // Wackeln danach). Bei Bedarf: stiffness hoch = straffer/schneller,
-  // damping runter = mehr Ueberschwingen.
+  // Match the native spring character with a small, quickly settling overshoot.
   const heightSpring = useSpring(PILL_H, {
     stiffness: 300,
     damping: 28,
@@ -617,16 +576,7 @@ export default function App() {
     }
   }, [targetHeight, skipEnterTransition, heightSpring, phase]);
 
-  // EIN persistenter Container fuer die Scoop-Form. Vorher wurde
-  // IslandShape in zwei getrennten JSX-Zweigen (isBig ? panel : pill)
-  // gemountet -> React hat das SVG bei jedem Wechsel komplett neu erzeugt,
-  // wodurch die Groessenaenderung ungeanimiert "gesnapped" ist, waehrend
-  // das Rust-seitige morph_window noch lief. Jetzt bleibt IslandShape
-  // durchgehend gemountet; nur die Hoehe des umgebenden Divs aendert sich,
-  // ueber denselben Spring-Charakter wie der Rust-seitige Fenster-Morph.
-  // HINWEIS: Dieses early-return MUSS hinter allen Hooks stehen (useSpring
-  // etc.) — sonst kracht React mit "Rendered more hooks..." und die Pill
-  // bleibt unsichtbar, obwohl der Sound schon lief.
+  // Keep IslandShape mounted across transitions. This early return must follow every hook.
   if (recentChatsOpen) {
     return (
       <RecentChatsDialog
@@ -650,8 +600,7 @@ export default function App() {
   return (
     <main
       onClick={() => {
-        // Done-Pill anklickbar: oeffnet Summary + Detail im Overlay.
-        // (Frage-Buttons/Overlay haben eigene Handler; Guard engt ein.)
+        // Clicking the completed pill opens results; question controls handle their own clicks.
         if (phase === "done" && (answer || detail) && !detailOpen) {
           openDetail();
         }
@@ -701,14 +650,7 @@ export default function App() {
           />
         )}
 
-        {/* Text-Layer: beide States kurz gleichzeitig gemountet, damit
-            exit/enter tatsaechlich uebereinander animieren koennen statt
-            hart zu tauschen. mode="popLayout" verhindert, dass das
-            austretende Element beim Verschwinden noch Layout beansprucht
-            und das eintretende verschiebt. Dauer bewusst kuerzer als die
-            Shape-Transition (150-180ms vs. 300ms), damit der Text fertig
-            ist, bevor die Form ihre Zielgroesse erreicht — sonst wirkt es
-            trotz smoother Form traege. Waehren Flash: nur Scoop, Stille. */}
+        {/* Overlap entering and exiting text without letting the exiting layer shift layout. */}
         {!flashActive && (
           <AnimatePresence mode="popLayout">
             {!isBig &&
@@ -856,9 +798,7 @@ export default function App() {
                   fontWeight: 400,
                 }}
               >
-                {/* Results ready: gleiche Zeilen-Geometrie wie Status,
-                    aber gruene DotmSquare8 (nur hier) + statischer Text
-                    ohne Shimmer. Klick oeffnet das Detail-Overlay. */}
+                {/* Results ready shares status geometry, with a green matrix and static text. */}
                 <PillRow
                   notchWidth={notch.width}
                   icon={

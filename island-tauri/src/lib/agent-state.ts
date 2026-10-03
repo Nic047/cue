@@ -75,9 +75,7 @@ function saveRecentChat(
   }
 }
 
-// ---------------------------------------------------------------------
-// Typen: die komplette Daten-Infrastruktur fuer Agent-UIs.
-// ---------------------------------------------------------------------
+// Shared agent UI state types.
 
 export type Phase =
   | "idle"
@@ -92,21 +90,21 @@ export interface PlanTask {
   id: string;
   type: "browser" | "sandbox";
   title: string;
-  /** Steps dieses Tasks (bereits ohne Titel-Prefix). */
+  /** Task steps without the title prefix. */
   steps: AgentStep[];
-  /** Status: laeuft / fertig (ok) / fertig (failed). undefined = noch nicht gestartet. */
+  /** Undefined means the task has not started. */
   status?: "running" | "done" | "failed";
   stepCount?: number;
 }
 
 export interface AgentStep {
-  /** Text ohne Task-Titel-Prefix, z.B. "navigate ok". */
+  /** Step text without the task-title prefix. */
   label: string;
-  /** true = Tool ok / normales Event, false = Tool fehlgeschlagen. */
+  /** true = Tool ok / normales Event, false = Tool failed. */
   ok: boolean;
   /** Tool-Name (navigate, click, read_page, run_command...), falls strukturiert. */
   tool?: string;
-  /** Ziel des Tools: URL, Selector, Befehl etc. */
+  /** Tool target: URL, selector, command, or path. */
   target?: string;
   /** Zugeordneter Task (falls bekannt). */
   taskId?: string;
@@ -117,43 +115,39 @@ export interface AgentState {
   transcript: string;
   onboardingActive: boolean;
   error: string | null;
-  /** Kurzer Einleitungssatz des Planers (< 10 Woerter, Englisch). */
+  /** Short planner introduction. */
   ack: string;
-  /** Plan-Summary (ein Satz). */
+  /** One-sentence plan summary. */
   planSummary: string;
   strategy: string;
   tasks: PlanTask[];
-  /** Alle Steps aller Tasks chronologisch (fuer eine flache Timeline). */
+  /** All task steps in chronological order. */
   allSteps: AgentStep[];
-  /** Finale Antwort (Markdown), null bis vorhanden. */
+  /** Final Markdown answer; null until available. */
   answer: string | null;
-  /** Ausführliche Fassung (nur via Detail-Overlay), null wenn keine. */
+  /** Detailed result; null when unavailable. */
   detail: string | null;
-  /** Detail-Overlay geöffnet. */
+  /** Whether the detail overlay is open. */
   detailOpen: boolean;
-  /** Offene Rückfrage des Orchestrators (Overlay, phasenunabhängig). */
+  /** Pending question, independent of the task phase. */
   question: AgentQuestion | null;
-  /** Plan-Dauer in ms (Plan-Event minus Run-Start), null bis geplant. */
+  /** Planning duration in milliseconds; null until planned. */
   planMs: number | null;
-  /** Gesamtlaufzeit in ms (eingefroren bei Antwort), null bis fertig. */
+  /** Total duration in milliseconds, frozen at completion. */
   totalMs: number | null;
-  /** Panel aufgeklappt (wird auch vom ?demo-Harness gelesen). */
+  /** Expanded-panel state shared with the demo harness. */
   expanded: boolean;
-  /** Laufzeit in Sekunden seit Orchestrator-Start (null = laeuft nicht). */
+  /** Elapsed seconds since startup; null when inactive. */
   elapsedSec: number | null;
 }
 
-/** Rückfrage des Orchestrators: Text + antippbare Optionen + Freitext. */
+/** Question text, suggested options, and free-text input. */
 export interface AgentQuestion {
   text: string;
   options: string[];
 }
 
-/**
- * true im ?demo-Browser-Harness (UI-Iteration ohne Task): Prod-Timer wie
- * der Done-Auto-Collapse werden dann pausiert, damit man in Ruhe auf
- * States schauen kann. In Tauri gibt es keinen Query-String — immer false.
- */
+/** The development harness pauses automatic collapse so states can be inspected. */
 export const IS_DEMO =
   typeof window !== "undefined" &&
   typeof window.location !== "undefined" &&
@@ -178,9 +172,7 @@ export function resultsPanelSize(
   return { width, height };
 }
 
-// ---------------------------------------------------------------------
-// Store: ein globales Singleton, mehrere Hooks teilen sich den Stand.
-// ---------------------------------------------------------------------
+// Global store shared by UI hooks.
 
 interface Store {
   phase: Phase;
@@ -197,7 +189,7 @@ interface Store {
   planMs: number | null;
   totalMs: number | null;
   startedAt: number | null;
-  /** Panel aufgeklappt (wird auch vom ?demo-Harness gelesen). */
+  /** Expanded-panel state shared with the demo harness. */
   expanded: boolean;
   listeners: Set<() => void>;
   transcript: string;
@@ -282,14 +274,12 @@ function cleanStep(msg: string): string {
   return msg;
 }
 
-/** Findet den laufenden Task zu einer Step-Nachricht (Titel-Prefix-Match). */
+/** Match a progress message to a running task by title prefix. */
 function taskForMessage(msg: string): PlanTask | undefined {
   return store.tasks.find((t) => msg.startsWith(t.title + ": "));
 }
 
-// ---------------------------------------------------------------------
-// Event-Verdrahtung: Tauri-Events -> Store. Einmal global, nicht pro Hook.
-// ---------------------------------------------------------------------
+// Wire Tauri events into the shared store once.
 
 let wired = false;
 
@@ -316,13 +306,9 @@ function ensureWired() {
     if (["arming", "listening", "transcribing"].includes(store.phase)) cancel();
   });
 
-  // Echte Klicks/Tasten im Fenster wecken den AudioContext — der globale
-  // Shortcut allein ist keine User-Geste, sonst bleibt er ggf. suspendiert
-  // (Autoplay-Policy) und Sounds spielen stumm ab.
+  // Real window gestures unlock audio; global shortcuts do not satisfy WebView autoplay policies.
   primeAudioOnGesture();
-  // Bluetooth verbinden/trennen tauscht die Audiogeraete unter einer
-  // laufenden Aufnahme weg: loggen (entprellt — BT feuert im Burst) +
-  // tote Aufnahme sauber abbrechen, statt Stille zu schicken.
+  // Log debounced device changes; native capture reports stream failures.
   let lastDevChangeLog = 0;
   try {
     navigator.mediaDevices?.addEventListener?.("devicechange", () => {
@@ -330,7 +316,7 @@ function ensureWired() {
       if (now - lastDevChangeLog > 2000) {
         lastDevChangeLog = now;
         void invoke("log_line", {
-          line: "[island] Audiogeräte geändert (z. B. Bluetooth verbunden/getrennt).",
+          line: "[island] Audio devices changed (for example a Bluetooth connection changed).",
         });
       }
     });
@@ -381,7 +367,7 @@ function ensureWired() {
       const step: AgentStep = { label: cleanStep(msg), ok: true };
       set({ allSteps: [...store.allSteps, step] });
     } else if (ev.type === "step") {
-      // Neue strukturierte Form: { taskId, tool, target, ok }.
+      // Structured progress: { taskId, tool, target, ok }.
       if (ev.tool) {
         const structured: AgentStep = {
           label: "",
@@ -398,10 +384,10 @@ function ensureWired() {
         });
         return;
       }
-      // Fallback: freier Text-Step (LLM-Gedanke etc.).
+      // Fallback: free-text model progress.
       const msg = ev.message ?? "";
       const raw = cleanStep(msg);
-      const ok = ev.ok !== false && !raw.includes("fehlgeschlagen");
+      const ok = ev.ok !== false && !raw.includes("failed");
       const step: AgentStep = { label: raw, ok };
       const task = ev.taskId
         ? store.tasks.find((t) => t.id === ev.taskId)
@@ -437,11 +423,10 @@ function ensureWired() {
         allSteps: [...store.allSteps, step],
       });
     } else if (ev.type === "answer") {
-      // Kein aktiver Lauf (idle nach Cancel/Kill)? Dann ist das ein spaetes
-      // Event eines toten Laufs — ignorieren statt "random" die Pill zu oeffnen.
+      // Ignore late events from cancelled runs.
       if (store.phase === "idle") {
         invoke("log_line", {
-          line: "[island] Späte Antwort ignoriert (kein aktiver Lauf).",
+          line: "[island] Late answer ignored; no active run.",
         });
         return;
       }
@@ -461,8 +446,7 @@ function ensureWired() {
         phase: "done",
         totalMs: store.startedAt ? Date.now() - store.startedAt : null,
       });
-      // Results ready: Cuelume-"scan" als Fertig-Signal. Fire-and-forget —
-      // bricht nie den Flow (cuelume schluckt Blockaden selbst, Guard trotzdem).
+      // Play completion feedback without interrupting task completion.
       try {
         playCue("scan");
       } catch {
@@ -477,7 +461,7 @@ function ensureWired() {
   });
 
   listen("orchestrator-done", () => {
-    // Falls kein answer-Event kam (Prozess tot / gekillt): trotzdem abschliessen.
+    // Finish state cleanup even when the process exited without an answer.
     if (store.phase === "error") return;
     set({ phase: store.answer ? "done" : "idle" });
     if (!store.answer) reset();
@@ -488,8 +472,7 @@ function ensureWired() {
 // Aktionen + Hooks
 // ---------------------------------------------------------------------
 
-// Laufende Aufnahme-Generation: cancel()/Neustart machen alte native
-// Start- und Transkriptionsketten wirkungslos.
+// Recording generations invalidate stale native startup and transcription work.
 let listenGen = 0;
 let stopRecording: (() => void) | undefined;
 let mediaControlQueue: Promise<void> | null = null;
@@ -524,15 +507,13 @@ function showAudioError(message: string, detail?: string) {
 
 export function startListening() {
   ensureWired();
-  // cancel()/Neustart invalidieren auch einen noch startenden nativen Stream.
+  // Cancellation or restart also invalidates a pending native stream.
   const gen = ++listenGen;
   set({ phase: "arming", error: null });
   queueMediaControl("pause");
-  // Akustische Bestätigung (soundCN click-002): Transkription startet.
-  // Fehler NICHT schlucken: "kein Ton" ist sonst unsichtbar (typisch:
-  // AudioContext suspendiert, weil der Shortcut keine User-Geste ist).
+  // Play transcription feedback and log failures so suspended audio is diagnosable.
   playSound(click002Sound.dataUri).catch((err) => {
-    void invoke("log_line", { line: `[island] Klick-Sound stumm: ${err}` });
+    void invoke("log_line", { line: `[island] Click sound unavailable: ${err}` });
   });
   void invoke<string>("start_audio_recording")
     .then((device) => {
@@ -565,14 +546,14 @@ export function startListening() {
                 recording.durationMs < 700
                   ? "Recording too short"
                   : "No audio captured",
-                "Native Aufnahme lieferte keine Samples.",
+                "The microphone returned no audio samples.",
               );
               return;
             }
             if (recording.maxPeak < SILENCE_PEAK_THRESHOLD) {
               showAudioError(
                 "Couldn't hear speech",
-                "Aufnahme war komplett still; Eingabegerät prüfen.",
+                "The recording was silent. Check your input device.",
               );
               return;
             }
@@ -590,7 +571,7 @@ export function startListening() {
               .catch((err) => {
                 if (gen !== listenGen) return;
                 invoke("log_line", {
-                  line: `[island] Transkription fehlgeschlagen: ${err}`,
+                  line: `[island] Transcription failed: ${err}`,
                 });
                 showAudioError("Transcription failed", String(err));
               });
@@ -599,7 +580,7 @@ export function startListening() {
             queueMediaControl("resume");
             if (gen !== listenGen) return;
             invoke("log_line", {
-              line: `[island] Aufnahme-Stop fehlgeschlagen: ${err}`,
+              line: `[island] Stopping the recording failed: ${err}`,
             });
             showAudioError("Recording failed", String(err));
           });
@@ -608,7 +589,7 @@ export function startListening() {
       window.setTimeout(() => {
         if (gen !== listenGen || store.phase !== "listening") return;
         invoke("log_line", {
-          line: "[island] 5-Minuten-Aufnahmelimit erreicht.",
+          line: "[island] Five-minute recording limit reached.",
         });
         stopAndTranscribe();
       }, 300_000);
@@ -617,7 +598,7 @@ export function startListening() {
       queueMediaControl("resume");
       if (gen !== listenGen) return;
       invoke("log_line", {
-        line: `[island] Mikrofon nicht verfuegbar: ${err}`,
+        line: `[island] Microphone unavailable: ${err}`,
       });
       showAudioError("Microphone unavailable", String(err));
     });
@@ -633,10 +614,7 @@ export function stopListeningAndRun() {
   } else if (stop) stop();
 }
 
-/**
- * Nur verstecken (Task laeuft im Hintergrund weiter). Bei Fertigstellung
- * (answer-Event) zeigt sich die Pill von selbst wieder.
- */
+/** Hide the pill while work continues; completion makes it visible again. */
 export function hidePill() {
   void invoke("hide_window");
 }
@@ -670,10 +648,9 @@ export function reset() {
   });
 }
 
-/** Detail-Overlay öffnen/schliessen (nur wenn Detail vorhanden). */
+/** Open or close available result details. */
 export function openDetail() {
-  // Summary allein reicht (Fallback-Merge ohne Detail) — Overlay zeigt,
-  // was da ist.
+  // Show the summary if synthesis produced no detail.
   if (store.detail || store.answer) set({ detailOpen: true });
 }
 
@@ -681,16 +658,12 @@ export function closeDetail() {
   set({ detailOpen: false });
 }
 
-/**
- * Rückfrage beantworten: Text an den Orchestrator (stdin) + Frage lokal
- * schliessen (der folgende plan-Task baut die Ansicht neu auf).
- * "" = ausdrücklich Cue entscheiden lassen; Timeout startet keine Tasks.
- */
+/** Send the response and close the question. Empty input delegates; timeout starts no tasks. */
 export function answerQuestion(text: string) {
   set({ question: null });
   invoke("answer_question", { text }).catch((err) => {
     invoke("log_line", {
-      line: `[island] Antwort senden fehlgeschlagen: ${err}`,
+      line: `[island] Sending the answer failed: ${err}`,
     });
   });
 }
@@ -716,10 +689,7 @@ function runTextTask(text: string) {
   );
 }
 
-/**
- * Dev-Demo: Store direkt setzen (nur für den ?demo-Harness, nie im
- * Produktivpfad verwendet). Ermöglicht UI-Iteration ohne Voice-Calls.
- */
+/** Replace state directly for the development harness only. */
 export function __demoSetState(patch: {
   phase?: Phase;
   error?: string | null;
@@ -741,23 +711,16 @@ export function __demoSetState(patch: {
   set(patch);
 }
 
-/**
- * Panel auf-/zuklappen (geteilter State, damit ?demo-Harness und App
- * dieselbe Quelle lesen).
- */
+/** Share expanded-panel state between App and the demo harness. */
 export function setExpanded(v: boolean) {
   set({ expanded: v });
 }
 
-/**
- * Der zentrale UI-Hook: alles, was eine Agent-UI braucht.
- *
- * const { phase, plan, steps, answer, actions } = useAgent();
- */
+/** Subscribe to agent state and expose actions to the UI. */
 export function useAgent(): AgentState & {
-  /** Escape / Shortcut-Handling: bricht alles ab. */
+  /** Cancel all active work. */
   cancel: () => void;
-  /** Nach "done": alles zuruecksetzen. */
+  /** Reset after completion. */
   reset: () => void;
 } {
   ensureWired();
@@ -770,7 +733,7 @@ export function useAgent(): AgentState & {
     };
   }, []);
 
-  // Verstrichene Zeit live mitzaehlen (100ms-Takt, 1 Dezimale).
+  // Update elapsed time every 100ms, displayed to one decimal place.
   const [elapsedSec, setElapsedSec] = useState<number | null>(null);
   useEffect(() => {
     if (store.phase !== "working") {
@@ -807,7 +770,7 @@ export function useAgent(): AgentState & {
   };
 }
 
-// Shortcut-Events (rechte Option / Escape) -> Aktionen. Global, einmal.
+// Wire shortcut events to actions once.
 let shortcutsWired = false;
 export function wireShortcuts(handlers: {
   onToggle: () => void;
@@ -817,10 +780,7 @@ export function wireShortcuts(handlers: {
   if (shortcutsWired) return;
   shortcutsWired = true;
   ensureWired();
-  // Entprellung: Falls der Tap je doppelt feuert, fasst dieses Fenster
-  // zwei Events zu EINEM Toggle zusammen (Gurtel + Hosentraeger zur
-  // Rust-Flanke). 100ms filtert Hardware-Doppel (<50ms), laesst aber
-  // bewusste Doppel-Taps (150ms+, z.B. Results oeffnen) durch.
+  // Debounce duplicate hardware events while preserving deliberate double taps.
   let lastToggle = 0;
   listen("shortcut-pressed", () => {
     const now = Date.now();
@@ -828,8 +788,7 @@ export function wireShortcuts(handlers: {
     lastToggle = now;
     handlers.onToggle();
   });
-  // Release-Flanke der rechten Option (fuer Hold-to-Peek). Optional —
-  // ohne Handler passiert nichts.
+  // Optional shortcut-release callback for hold-to-peek.
   listen("shortcut-released", () => handlers.onRelease?.());
   listen("escape-pressed", () => handlers.onCancel());
 }

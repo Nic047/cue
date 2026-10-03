@@ -14,15 +14,9 @@ import {
   type DemoState,
 } from "./scenarios";
 
-/**
- * Dev-Harness (?demo in der URL): spielt Szenarien + Event-Skripte in den
- * ECHTEN Store, die ECHTE App rendert. UI-Iteration im Browser mit HMR,
- * ohne Voice-Calls, ohne Tauri (invoke/listen rejecten still im Browser).
- *
- * Aufruf: `bun run dev` + http://localhost:5173/?demo
- */
+/** Development harness at ?demo: replay scenarios into the real store without voice or cloud calls. */
 
-// Darstellungspacing im Fake-Desktop (Menüleiste ist Deko).
+// Simulated desktop spacing.
 const TICK_SLOW = 750;
 const TICK_FAST = 300;
 
@@ -47,8 +41,7 @@ export default function DemoApp() {
   const select = (id: string) => {
     const sc = SCENARIOS.find((s) => s.id === id) ?? SCENARIOS[0];
     const { state, script } = freshInitial(id);
-    // Store zuerst leeren: sonst ueberlebt z. B. ein offenes
-    // Detail-Overlay oder eine alte Antwort den Szenario-Wechsel.
+    // Reset the store so prior results and overlays do not leak into the next scenario.
     reset();
     localRef.current = state;
     setLocal(state);
@@ -68,14 +61,13 @@ export default function DemoApp() {
     setLocal({ ...st, phase: "idle" });
   };
 
-  // Direkt mit etwas Sichtbarem starten (StrictMode-safe: select ist
-  // idempotent — reset + voller Store-Overwrite).
+  // Select an initial visible scenario; reset and replacement are idempotent under StrictMode.
   useEffect(() => {
     select("listening");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Ein Event pro Tick (StrictMode-safe: kein Seiteneffekt im Updater).
+  // Apply one event per tick without side effects in a state updater.
   useEffect(() => {
     if (!playing) return;
     const sc = SCENARIOS.find((s) => s.id === scenarioId);
@@ -99,15 +91,10 @@ export default function DemoApp() {
   const sc = SCENARIOS.find((s) => s.id === scenarioId) ?? SCENARIOS[0];
   const scriptLen = sc.script?.length ?? 0;
 
-  // Fake-OS-Fenster: bildet exakt die Rust-Fenstergrössen pro Phase nach,
-  // damit Proportionen 1:1 wie in Produktion aussehen (die App selbst
-  // rendert mit width/height 100% des Fensters).
+  // Match native window dimensions so the app renders at realistic proportions.
   const live = useAgent();
   const winVisible = live.phase !== "idle" || live.question !== null;
-  // Fake-OS-Fenster: bildet die Prod-Fenstergroessen pro Phase nach —
-  // Small-Pill fuer ALLE Status + Done ("Results ready"), Panel-Hoehe
-  // nur fuer Frage. Overlay = monitorabhaengige Leseflaeche wie in Prod
-  // (Browser-screen als Naeherung). Breite je State.
+  // Use production sizing for compact states, questions, and results.
   const scrW =
     typeof window !== "undefined" && window.screen ? window.screen.width : 1728;
   const scrH =
@@ -180,10 +167,7 @@ export default function DemoApp() {
         </span>
       </header>
 
-      {/* Bühne: Fake-Desktop mit Menüleiste, Pill dockt oben an.
-          Das Fenster um <App/> hat exakt Produktions-Masse (Rust-seitig),
-          damit Proportionen stimmen — sonst stretcht die Pill auf
-          Bühnenbreite. CSS-Transition statt hartem Snap. */}
+      {/* Simulated desktop with a top-anchored window matching native dimensions. */}
       <div className="flex justify-center px-4 pt-8 pb-4">
         <div className="relative h-[760px] w-[1600px] max-w-[94vw] overflow-hidden rounded-[28px] border border-white/10 bg-gradient-to-b from-[#171c26] to-[#090c11] shadow-2xl">
           <div className="flex h-7 items-center gap-2 px-4 text-[11px] text-white/60">
@@ -206,21 +190,21 @@ export default function DemoApp() {
               </div>
             ) : (
               <div className="pt-16 font-mono text-[11px] text-white/25">
-                idle — Fenster versteckt (Szenario wählen)
+                idle — window hidden (choose a scenario)
               </div>
             )}
           </div>
         </div>
       </div>
 
-      {/* Event-Log: was der Player zuletzt in den Store geschrieben hat */}
+      {/* Events most recently applied to the store. */}
       <div className="mx-auto max-w-[1040px] px-4 pb-10">
         <div className="rounded-xl border border-white/10 bg-black/40 p-3 font-mono text-[11px] leading-relaxed text-white/60">
           <div className="mb-1 text-[10px] tracking-widest text-white/30 uppercase">
             store writes
           </div>
           {log.length === 0 ? (
-            <div className="text-white/25">— noch nichts —</div>
+            <div className="text-white/25">— no events yet —</div>
           ) : (
             <ol className="m-0 list-none p-0">
               {log.map((line, i) => (

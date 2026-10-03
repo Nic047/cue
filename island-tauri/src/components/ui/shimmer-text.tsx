@@ -13,21 +13,11 @@ const __TRANSITION_STYLES = `
   --shimmer-ease: ease-in-out;
 }
 
-/* Two-layer construction:
-   1. The base text renders normally in --shimmer-base.
-   2. ::before duplicates it via content: attr(data-text),
-      paints a narrow transparent → highlight → transparent band
-      onto it, and clips that band to the glyphs via
-      background-clip: text. Animating background-position
-      sweeps the band across the text, letter by letter.
-   Band + Range sind so gewaehlt, dass der Sweep quasi durchgehend
-   sichtbar ist (220% -> -120% bei 130% Bandbreite): Bei 250% Band
-   mit 120% -> -120% stand das Band ~60% jedes Zyklus ausserhalb der
-   Glyphen — der Text wirkte eingefroren, obwohl die Animation lief. */
+/* Duplicate text in a clipped highlight layer; sweep its background across the glyphs without long invisible intervals. */
 .t-shimmer {
   position: relative;
   display: inline-block;
-  color: var(--shimmer-base);f55
+  color: var(--shimmer-base);
 }
 .t-shimmer::before {
   content: attr(data-text);

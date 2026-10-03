@@ -1,8 +1,6 @@
 @import "tailwindcss";
 
-/* ---- Island Theme-Tokens (Tailwind v4) ----
-   Hier tweaken: Fonts, Easing, Animationen. Utilities wie
-   `ease-island`, `animate-step-in`, `font-mono` kommen von hier. */
+/* Shared Tailwind theme tokens for typography and motion. */
 @theme {
     --font-sans: "Geist", ui-sans-serif, system-ui, -apple-system, sans-serif;
     --font-mono: "Geist Mono", ui-monospace, "SF Mono", monospace;
@@ -23,7 +21,7 @@
     }
 }
 
-/* Island: transparenter Hintergrund, kein Scroll, keine Default-Styles */
+/* Transparent overlay; disable document scrolling and default spacing. */
 html,
 body,
 #root {
@@ -40,7 +38,7 @@ body,
 .cf-viewport {
     position: relative;
     display: inline-block;
-    /* clippt die ein-/auswandernden Texte auf die Zeilenhoehe */
+    /* Clip moving text to the line height. */
     overflow: hidden;
     line-height: 42px; /* Pill-Hoehe: Text bleibt vertikal zentriert */
 }
@@ -131,8 +129,7 @@ body,
     .recent-context-menu[data-state="closed"] { animation-name: recent-context-fade-out; }
 }
 
-/* Shimmer-Sweep (Highlight-Band wandert per background-position
-   über die Glyphen) — siehe shimmer-text.tsx. */
+/* Sweep a highlight across text; see shimmer-text.tsx. */
 .t-shimmer,
 .t-shimmer::before {
     will-change: background-position;
@@ -154,9 +151,7 @@ body,
     }
 }
 
-/* Commit-Fade: Nach "Running..." blendet die Pill weich aus (250ms),
-   bevor das Fenster versteckt wird. Ersetzt island-in komplett, solange
-   die Klasse sitzt (spaetere Animation gewinnt bei gleicher Property). */
+/* Fade the running confirmation before hiding the native window. */
 .island-enter.island-leaving {
     animation: island-out 250ms ease-out both;
 }
@@ -179,9 +174,7 @@ body,
     }
 }
 
-/* ---- Agent-UI: Styling lebt in agent-ui.tsx (Tailwind-Utilities).
-   Zentrale Tokens (Fonts, Easing, Animationen): @theme oben.
-   Die `agent-*`-Klassen im JSX sind nur stabile Hooks, kein CSS. ---- */
+/* Agent component styles live in agent-ui.tsx; shared tokens are defined above. */
 
 /* ---- Results Markdown ---- */
 .md-results {

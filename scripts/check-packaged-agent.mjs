@@ -16,7 +16,7 @@ try {
   });
   assert.equal(result.error, undefined);
   assert.equal(result.status, 1, result.stderr);
-  assert.match(result.stderr, /Nutzung:/);
+  assert.match(result.stderr, /Usage:/);
   assert.doesNotMatch(result.stderr, /ERR_MODULE_NOT_FOUND|Cannot find module/);
   console.log('Packaged sidecar starts outside the repository with bundled Node and dependencies.');
 } finally {

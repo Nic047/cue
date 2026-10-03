@@ -42,22 +42,12 @@ export function usePillShortcuts({
   const callbacks = useRef({ closeOverlay, dismissRecentChats });
   callbacks.current = { closeOverlay, dismissRecentChats };
 
-  // Shortcut-Verdrahtung: einmal, global.
-  // Escape kommt nur an, wenn die Pill offen ist (Rust schluckt es sonst
-  // gar nicht erst) — die Front-App sieht es dann nie.
-  // Einmal = Pill weg (Task laeuft ggf. weiter), 2x schnell = alles killen.
-  // Offenes Detail-Overlay geht immer vor (schliessen statt killen).
-  // Hold-to-Peek: Option 1.5s halten (nur waehrend working) blendet den
-  // Status ein; Loslassen versteckt ihn wieder. Tap-Verhalten unveraendert.
+  // Escape hides, double Escape cancels; open details close first. Holding the shortcut reveals background progress.
   const lastEsc = useRef(0);
   const holdTimerRef = useRef<number | null>(null);
   const peekShownRef = useRef(false);
   const peekHideTimerRef = useRef<number | null>(null);
-  // Doppel-Tap rechte Option bei Done: erster Tap wartet kurz, ob ein
-  // zweiter folgt (Results oeffnen) — sonst normaler Reset. EIN Fenster
-  // fuer beides (Timer + Vergleich), sonst entsteht eine Luecke, in der
-  // der Reset schon lief, der zweite Tap aber noch als "Doppel" zaehlt
-  // (oder umgekehrt) — genau das hat den Doppel-Tap unzuverlaessig gemacht.
+  // Use the same interval for the timer and double-tap comparison to avoid inconsistent resets.
   const DONE_DOUBLE_TAP_MS = 800;
   const lastDoneTap = useRef(0);
   const doneTapTimer = useRef<number | null>(null);
@@ -83,12 +73,10 @@ export function usePillShortcuts({
     void presentWindow(pillDimensions.current).then(() =>
       emitTo("onboarding", "onboarding-peek", {}),
     );
-    // Peek zeigt die kleine Pill (Working-Status) — gleiche Masse wie
-    // Voice: Small-Pill-Hoehe, keine Panel-Groesse mehr.
+    // Peek uses compact voice-pill dimensions.
     peekHideTimerRef.current = window.setTimeout(() => {
       peekHideTimerRef.current = null;
-      // Sicherheitsnetz: auch bei gehaltenem Finger irgendwann zu
-      // (Release blendet normalerweise aus, s. onRelease).
+      // Safety timeout if the release event is missed.
       if (peekShownRef.current && phaseRef.current === "working") {
         peekShownRef.current = false;
         void invoke("hide_window");
@@ -101,8 +89,7 @@ export function usePillShortcuts({
     clearPeekHideTimer();
     if (!peekShownRef.current) return;
     peekShownRef.current = false;
-    // Nur verstecken, wenn der Run noch laeuft — done-summary etc.
-    // gehoert dem normalen Flow (wird dort gezeigt/gemorpht).
+    // Hide only while work remains active; completion owns its own presentation.
     if (phaseRef.current === "working") void invoke("hide_window");
   }
 
@@ -118,15 +105,12 @@ export function usePillShortcuts({
         if (p === "idle" || p === "error") startListening();
         else if (p === "arming" || p === "listening") stopListeningAndRun();
         else if (p === "working") {
-          // Kein sofortiges Show mehr — nur Peek-Timer armen.
-          // (Altes "press = re-show" ist durch Hold-to-Peek ersetzt.)
+          // Arm the hold timer without showing the pill immediately.
           if (holdTimerRef.current == null) {
             holdTimerRef.current = window.setTimeout(showPeek, HOLD_TO_PEEK_MS);
           }
         } else if (p === "done") {
-          // Single vs. Doppel-Tap entwirren: Erster Tap wartet
-          // DONE_DOUBLE_TAP_MS — folgt ein zweiter, oeffnet das grosse
-          // Results-Panel, sonst normaler Reset (Pill zu).
+          // Wait briefly for a second tap to open results; otherwise reset the compact pill.
           const now = Date.now();
           if (now - lastDoneTap.current < DONE_DOUBLE_TAP_MS) {
             if (doneTapTimer.current != null) {
@@ -134,7 +118,7 @@ export function usePillShortcuts({
               doneTapTimer.current = null;
             }
             lastDoneTap.current = 0;
-            log("[island] Doppel-Tap: Results-Panel oeffnen.");
+            log("[island] Double tap: opening results.");
             openDetail();
           } else {
             lastDoneTap.current = now;
@@ -152,7 +136,7 @@ export function usePillShortcuts({
         hidePeek();
       },
       onCancel: () => {
-        hidePeek(); // Peek-Flag weg (Sichtbarkeit regeln die Zweige unten)
+        hidePeek(); // Clear peek; the branches below determine visibility.
         if (recentChatsOpenRef.current) {
           callbacks.current.dismissRecentChats();
           return;
@@ -173,10 +157,10 @@ export function usePillShortcuts({
           cancel(); // zu + Task killen
           return;
         }
-        // Einmal: Pill schliessen, egal welche Groesse.
+        // A single Escape closes either pill size.
         const p = phaseRef.current;
         if (p === "working")
-          hidePill(); // Task laeuft weiter, Ende zeigt sich wieder
+          hidePill(); // Work continues; completion will show the pill again.
         else cancel(); // listening/transcribing/done: verwerfen + zu
       },
     });

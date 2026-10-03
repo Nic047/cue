@@ -66,10 +66,7 @@ extern "C" {
 
 static APP_HANDLE: OnceLock<AppHandle> = OnceLock::new();
 
-/// Ob die rechte Option-Taste gerade gehalten wird (Flankenerkennung).
-/// Nur der Uebergang losgelassen->gedrueckt feuert "shortcut-pressed"
-/// (kein Spam, wenn bei gehaltener Taste andere Modifier wackeln),
-/// nur gedrueckt->losgelassen feuert "shortcut-released" (fuer Hold-Peek).
+/// Emit shortcut events on press/release edges, avoiding repeated modifier events.
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Shortcut {
@@ -240,9 +237,7 @@ unsafe fn capture_key(event: *mut c_void, keycode: u16, flags: u64) {
 
 static OPTION_HELD: AtomicBool = AtomicBool::new(false);
 
-/// Tap-Handle fuers Reaktivieren: macOS schaltet Event-Taps u.a. bei
-/// Timeout/Sperre kommentarlos ab — ohne Re-Enable waeren danach
-/// saemtliche Shortcuts bis zum App-Neustart tot.
+/// Keep the event tap handle so disabled taps can be re-enabled.
 static ENABLED: AtomicBool = AtomicBool::new(false);
 static INSTALLING: AtomicBool = AtomicBool::new(false);
 static PERMISSION_FAILURE_REPORTED: AtomicBool = AtomicBool::new(false);
@@ -259,27 +254,21 @@ pub fn is_ready() -> bool {
 
 static TAP_HANDLE: AtomicUsize = AtomicUsize::new(0);
 
-/// true, sobald die Pill sichtbar ist (gesetzt von show_/hide_window).
-/// Nur dann wird Escape geschluckt + ans Frontend gemeldet.
-/// Pill zu => Escape geht unveraendert ans System (YouTube etc. reagieren normal).
+/// Pill visibility is one condition for intercepting Escape.
 static PILL_OPEN: AtomicBool = AtomicBool::new(false);
 
 pub fn set_pill_open(open: bool) {
     PILL_OPEN.store(open, Ordering::SeqCst);
 }
 
-/// true, solange ein Orchestrator-Task laeuft (gesetzt beim Spawn,
-/// geloescht bei Cleanup/Kill) — UNABHAENGIG von der Pill-Sichtbarkeit.
-/// Hintergrund-Task + Pill zu: Escape gehoert trotzdem uns, damit ein
-/// laufender Task per Tastatur erreichbar/killbar bleibt. Idle ohne Task:
-/// Escape geht normal ans System.
+/// Active background tasks also intercept Escape, allowing cancellation while hidden.
 static TASK_ACTIVE: AtomicBool = AtomicBool::new(false);
 
 pub fn set_task_active(active: bool) {
     TASK_ACTIVE.store(active, Ordering::SeqCst);
 }
 
-/// Escape gehoert uns, sobald Pill offen ODER Task aktiv ist.
+/// Intercept Escape when the pill is visible or a task is active.
 fn esc_is_ours() -> bool {
     PILL_OPEN.load(Ordering::SeqCst) || TASK_ACTIVE.load(Ordering::SeqCst)
 }
@@ -290,15 +279,13 @@ unsafe extern "C" fn on_flags_changed(
     event: *mut c_void,
     _userinfo: *mut c_void,
 ) -> *mut c_void {
-    // System hat den Tap abgeschaltet (Timeout/Sperre/User-Input):
-    // sofort reaktivieren, sonst sind alle Shortcuts bis Neustart tot.
-    // `event` ist hier NULL und darf nicht angefasst werden.
+    // Re-enable disabled taps immediately. Their event pointer is null and must not be dereferenced.
     if etype == K_CG_EVENT_TAP_DISABLED_BY_TIMEOUT || etype == K_CG_EVENT_TAP_DISABLED_BY_USER_INPUT
     {
         let tap = TAP_HANDLE.load(Ordering::SeqCst) as *mut c_void;
         if !tap.is_null() {
             CGEventTapEnable(tap, true);
-            eprintln!("[island] Event-Tap war deaktiviert, reaktiviert.");
+            eprintln!("[island] Event tap was disabled; re-enabled.");
         }
         return std::ptr::null_mut();
     }
@@ -383,11 +370,9 @@ unsafe extern "C" fn on_flags_changed(
     if etype == K_CG_EVENT_KEY_DOWN {
         if keycode == K_VK_ESCAPE {
             if !esc_is_ours() {
-                return event; // weder Pill noch Task: normal durchreichen, kein Emit.
+                return event; // No pill or task: pass through without emitting.
             }
-            // Gehaltenes Escape (Autorepeat): still schlucken, aber KEIN
-            // Event ans Frontend — sonst wuerde Halten versehentlich
-            // als Doppel-Tap (Cancel) zaehlen.
+            // Swallow Escape autorepeat without emitting another event; holding must not count as double-tapping.
             let repeat = CGEventGetIntegerValueField(event, K_CG_KEYBOARD_EVENT_AUTOREPEAT);
             if repeat != 0 {
                 return std::ptr::null_mut();
@@ -397,8 +382,8 @@ unsafe extern "C" fn on_flags_changed(
                     let _ = win.emit("escape-pressed", ());
                 }
             }
-            eprintln!("[island] Escape geschluckt + gemeldet (Pill offen).");
-            return std::ptr::null_mut(); // geschluckt: Front-App sieht nichts
+            eprintln!("[island] Escape handled while the pill is open.");
+            return std::ptr::null_mut(); // Consumed; do not forward to the foreground app.
         }
     }
     event
@@ -435,7 +420,7 @@ pub fn install(app: AppHandle) {
             source,
             K_CF_RUNLOOP_COMMON_MODES as *mut c_void,
         );
-        CFRunLoopRun(); // blockiert diesen Thread absichtlich fuer immer
+        CFRunLoopRun(); // Keep this dedicated event thread alive.
     });
 }
 

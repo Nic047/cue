@@ -1,23 +1,9 @@
-/**
- * Agent-UI-Komponenten — gestylt mit Tailwind-Utilities.
- *
- * Jede Komponente behaelt zusaetzlich ihre stabile `agent-*`-Klasse als
- * Hook (Tests, spaetere CSS-Eingriffe). Look tweaken = Utilities direkt
- * hier im JSX aendern. Theme-Tokens (Fonts, Easing, Animationen) liegen
- * zentral in `src/index.css` (@theme).
- *
- * Jede Komponente bekommt ihre Daten als Props (aus useAgent()),
- * keine globale Kopplung.
- */
+/** Presentational agent components; styling uses Tailwind and shared theme tokens in index.css. */
 import { useLayoutEffect, useRef, useState } from "react";
 import { ArrowUp, ChevronRight, MessageCircle } from "lucide-react";
 import type { AgentQuestion } from "../lib/agent-state";
 
-/**
- * Die kompakte Pill (listening/transcribing): zeigt nur Status-Label.
- * Der Scoop-SVG-Hintergrund bleibt vom Aufrufer (App) gesetzt – hier nur
- * der Content.
- */
+/** Compact status content; App provides the scoop background. */
 export function PillContent({ phase }: { phase: string }) {
   const label =
     {
@@ -28,10 +14,7 @@ export function PillContent({ phase }: { phase: string }) {
   return <span className="">{label}</span>;
 }
 
-/**
- * Rückfrage an den Nutzer: Text + antippbare Optionen + freies Textfeld.
- * onAnswer("") = keine Angabe → Orchestrator plant mit Annahme weiter.
- */
+/** Question choices and free text. An empty answer delegates the choice to Cue. */
 export function QuestionPanel({
   question,
   onAnswer,

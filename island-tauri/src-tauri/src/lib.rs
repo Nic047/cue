@@ -9,7 +9,7 @@ mod orchestrator_bridge;
 mod window_layout;
 use orchestrator_bridge::OrchestratorState;
 
-/// Frontend-Logs ins Terminal durchreichen (Webview-Console ist unsichtbar).
+/// Forward WebView logs to the terminal.
 #[tauri::command]
 fn log_line(line: String) {
     println!("{}", line);
@@ -123,8 +123,7 @@ pub fn run() {
                     return Ok(());
                 }
             }
-            // Menueleisten-App: kein Dock-Icon (Agent). Die Pill laeuft
-            // als NSPanel weiter und kuemmert sich nicht um Aktivierung.
+            // Run as a menu bar app; the pill uses a nonactivating NSPanel.
             #[cfg(target_os = "macos")]
             let _ = app
                 .handle()
@@ -147,8 +146,7 @@ pub fn run() {
             global_shortcut::set_enabled(complete);
             app.manage(media_control::MediaControl::default());
 
-            // Globalen Hotkey (rechte Option-Taste) installieren – der
-            // Shortcut toggle im Frontend den Listen/Transcribe-Loop.
+            // Install the global shortcut listener.
             global_shortcut::install(app.handle().clone());
 
             let Some(window) = app.get_webview_window("main") else {
@@ -161,24 +159,18 @@ pub fn run() {
                 use tauri_nspanel::cocoa::appkit::NSWindowCollectionBehavior;
                 use tauri_nspanel::WebviewWindowExt;
 
-                // NSWindow -> NSPanel: Standard-NSWindows koennen sich per
-                // macOS-Design NICHT ueber native Fullscreen-Apps legen.
-                // NSPanels schon – genau dafuer existieren sie.
+                // NSPanel supports placement above native full-screen applications.
                 let panel = window.to_panel()?;
 
-                // Nonactivating (1 << 7): die Pill klaut nie den Fokus.
+                // Nonactivating panels do not steal focus.
                 const NS_WINDOW_STYLE_MASK_NONACTIVATING_PANEL: i32 = 1 << 7;
                 panel.set_style_mask(NS_WINDOW_STYLE_MASK_NONACTIVATING_PANEL);
                 panel.set_floating_panel(true);
 
-                // Beim App-/Window-Wechsel sichtbar bleiben: NSPanels
-                // verstecken sich sonst, sobald die App deaktiviert wird.
+                // Keep the panel visible when another application becomes active.
                 panel.set_hides_on_deactivate(false);
 
-                // Auf allen Spaces + ueber Fullscreen-Apps + stationaer.
-                // N.B.: tauri-nspanel 2.0.1 nimmt hier den cocoa-Typ — der ist
-                // deprecated (objc2-app-kit waere neu), aber ein objc2-Wert
-                // passt nicht in set_collection_behaviour. Warnung ok.
+                // Join all spaces and full-screen apps. tauri-nspanel requires the deprecated cocoa enum here.
                 #[allow(deprecated)]
                 panel.set_collection_behaviour(
                     NSWindowCollectionBehavior::NSWindowCollectionBehaviorCanJoinAllSpaces
@@ -186,11 +178,10 @@ pub fn run() {
                         | NSWindowCollectionBehavior::NSWindowCollectionBehaviorStationary,
                 );
 
-                // Screen-Saver-Level (1000): ueber Menuebar, Dock und
-                // Fullscreen-Apps. Als Panel ueberlebt es den Fullscreen-Space.
+                // Use screen-saver level to display above the menu bar and full-screen apps.
                 panel.set_level(1000);
 
-                // Sicherstellen, dass es tatsaechlich gerendert wird.
+                // Ensure the panel is rendered.
                 panel.order_front_regardless();
             }
 
@@ -214,9 +205,8 @@ pub fn run() {
                 }
             });
 
-            // Monochromes transparentes Icon passt sich dem Menueleisten-Modus an.
-            // Linksklick = wie rechter Option-Hotkey (toggelt den Loop uebers
-            // Frontend, inkl. Debounce). Rechtsklick = Menue.
+            // Use a monochrome template icon that adapts to the menu bar.
+            // Left click routes through the frontend shortcut handler; right click opens the menu.
             let menu = build_tray_menu(app.handle())?;
             let icon = tauri::image::Image::from_bytes(include_bytes!("../icons/tray-icon.png"))?;
             tauri::tray::TrayIconBuilder::with_id("main")

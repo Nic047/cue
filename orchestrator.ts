@@ -14,7 +14,7 @@ import {
 import { mergeResults } from "./agent/results.js";
 import { emitEvent, logStep } from "./agent/events.js";
 import { waitWithTimeout } from "./shared/wait-with-timeout.js";
-// Public entry points used by the benchmark and acceptance checks.
+// Public entry points used by runtime checks.
 export {
   runBrowserTask,
   completionError,
@@ -52,12 +52,7 @@ async function generateChatTitle(
 
 const QUESTION_TIMEOUT_MS = 90_000;
 
-/**
- * Antwort des Nutzers auf eine Rückfrage lesen (eine Zeile via stdin —
- * die Tauri-Bridge schreibt per answer_question-Command hinein).
- * Timeout/geschlossenes stdin → null (keine Umsetzung ohne Antwort).
- * Eine bewusst leere Antwort bedeutet: Nutzer lässt Cue entscheiden.
- */
+/** Read a response line from stdin. EOF/timeout means no action; an empty line explicitly delegates to Cue. */
 function readQuestionAnswer(timeoutMs: number): Promise<string | null> {
   return new Promise((resolve) => {
     let done = false;
@@ -73,7 +68,7 @@ function readQuestionAnswer(timeoutMs: number): Promise<string | null> {
       resolve(value?.trim() ?? null);
     };
     const timer = setTimeout(() => finish(null), timeoutMs);
-    // Timer allein hält nichts unnötig wach, blockiert aber auch nichts.
+    // The timer must not keep the process alive.
     timer.unref?.();
     let rl: ReturnType<typeof readline.createInterface> | undefined;
     try {
@@ -88,11 +83,11 @@ function readQuestionAnswer(timeoutMs: number): Promise<string | null> {
   });
 }
 
-/** Zeitpunkt des letzten gesendeten Events – fuer den Keepalive-Throttle. */
+/** Timestamp of the last event for heartbeat throttling. */
 async function main() {
   const userRequest = process.argv.slice(2).join(" ");
   if (!userRequest) {
-    console.error('Nutzung: npm start -- "..."');
+    console.error('Usage: npm start -- "..."');
     process.exit(1);
   }
 
@@ -101,22 +96,20 @@ async function main() {
   try {
     plan = await planTasks(userRequest);
   } catch (err) {
-    // Planung endgültig fehlgeschlagen: ehrliche Antwort statt Stacktrace,
-    // damit die UI sauber abschliesst.
-    console.error("◈ Planung fehlgeschlagen:", String(err).slice(0, 200));
+    // Return an honest planning failure so the UI can finish cleanly.
+    console.error("◈ Planning failed:", String(err).slice(0, 200));
     emitEvent({
       type: "answer",
-      text: "Ich konnte deine Anfrage leider nicht einplanen – versuch es bitte nochmal.",
+      text: "I couldn't plan your request. Please try again.",
       detail: "",
     });
     return;
   }
 
-  // Rückfrage nötig? Frage ans UI stellen, auf Antwort warten (oder Timeout),
-  // dann mit der Antwort neu planen. Antwort landet in den Tasks.
+  // Ask before execution, then replan with the response.
   if (plan.question?.text?.trim()) {
     const q = plan.question;
-    console.error(`◈ Rückfrage: ${q.text}`);
+    console.error(`◈ Question: ${q.text}`);
     emitEvent({
       type: "question",
       text: q.text,
@@ -126,40 +119,40 @@ async function main() {
     if (answer === null) {
       emitEvent({
         type: "answer",
-        text: "Ich habe keine Auswahl erhalten und noch nichts gestartet. Bitte versuche es erneut.",
+        text: "I didn't receive a choice and haven't started anything. Please try again.",
         detail: "",
       });
       return;
     }
     const selected =
       answer || q.options.find((option) => option.trim())?.trim();
-    console.error(`◈ Rückfrage-Antwort: ${answer || "(Cue entscheidet)"}`);
+    console.error(`◈ Question answer: ${answer || "(Cue decides)"}`);
     const enriched =
       userRequest +
-      "\n\n[Rückfrage an den Nutzer: " +
+      "\n\n[Question for the user: " +
       q.text +
-      " | Antwort des Nutzers: " +
+      " | User response: " +
       (answer ||
         (selected
-          ? `Cue entscheidet: Der Nutzer hat die Auswahl ausdrücklich delegiert. Gewählte Option: ${selected}.`
-          : "Cue entscheidet: Der Nutzer hat die Auswahl ausdrücklich delegiert. Triff eine passende Annahme.")) +
-      "]\nDie Rückfrage ist damit beantwortet. Führe die ursprüngliche Aufgabe mit dieser Auswahl aus. " +
-      "Erstelle konkrete tasks; note leer, keine erneute question. Nenne die Auswahl im Ergebnis.";
+          ? `Cue decides: The user explicitly delegated the choice. Selected option: ${selected}.`
+          : "Cue decides: The user explicitly delegated the choice. Make a reasonable assumption.")) +
+      "]\nThe question has been answered. Complete the original task using this choice. " +
+      "Create concrete tasks; leave note empty and omit question. State the choice in the result.";
     try {
       plan = await planTasks(enriched);
       if (plan.tasks.length === 0) {
         plan = await planTasks(
           enriched +
-            "\nDein letzter Plan enthielt keine Tasks. " +
-            "Die ursprüngliche Aufgabe ist ausführbar und die Auswahl wurde beantwortet. " +
-            "Korrigiere den Plan mit mindestens einem browser- oder sandbox-Task für die Umsetzung.",
+            "\nYour last plan had no tasks. " +
+            "The original task is executable and the choice has been answered. " +
+            "Correct the plan with at least one browser or sandbox task.",
         );
       }
     } catch (err) {
-      console.error("◈ Re-Planung fehlgeschlagen:", String(err).slice(0, 200));
+      console.error("◈ Re-Planning failed:", String(err).slice(0, 200));
       emitEvent({
         type: "answer",
-        text: "Ich konnte deine Anfrage leider nicht einplanen – versuch es bitte nochmal.",
+        text: "I couldn't plan your request. Please try again.",
         detail: "",
       });
       return;
@@ -167,20 +160,20 @@ async function main() {
     if (plan.tasks.length === 0) {
       emitEvent({
         type: "answer",
-        text: "Ich konnte die Umsetzung nach deiner Auswahl nicht planen. Bitte versuche es erneut.",
+        text: "I couldn't plan the task after your choice. Please try again.",
         detail: "",
       });
       return;
     }
   }
 
-  // Keine ausfuehrbare Aufgabe (Begruessung etc.): sauber beenden statt crash.
+  // Finish cleanly when no executable task was requested.
   if (plan.tasks.length === 0) {
     const msg =
       plan.note ||
-      "Ich habe keine konkrete Aufgabe erkannt – sag mir, was ich tun soll.";
+      "I couldn't identify a concrete task. Tell me what you'd like me to do.";
     emitEvent({ type: "answer", text: msg, detail: "" });
-    console.error("◈ Keine ausfuehrbare Aufgabe:", msg);
+    console.error("◈ No executable task:", msg);
     return;
   }
 
@@ -208,8 +201,7 @@ async function main() {
   }
   console.error();
 
-  // Status auch als Event rausschreiben (task_start/step), parallel zum
-  // menschlichen Log.
+  // Emit structured progress alongside terminal logs.
   const emit: StatusFn = (status, message, taskId) => {
     logStep(status, message);
     emitEvent({
@@ -238,9 +230,7 @@ async function main() {
   console.error();
   console.error(summary);
 
-  // Replays erst NACH der Antwort einsammeln (UI hat sie schon),
-  // dann Client schliessen (mit Timeout — close() kann bei einem
-  // angeschlagenen Backend ebenfalls haengen).
+  // Deliver the answer before replay lookup, then close the client with bounded waiting.
   console.error();
   console.error("◈ REPLAYS");
   await resolveReplays(solari, results);
@@ -251,20 +241,19 @@ async function main() {
   for (const result of results) {
     const mark = result.ok ? "✔" : "✘";
     console.error(
-      `  ${mark} [${result.type}] ${result.title} (${result.steps} Schritte, ${result.model})`,
+      `  ${mark} [${result.type}] ${result.title} (${result.steps} steps, ${result.model})`,
     );
     console.error(`    ${result.ok ? result.text : result.error}`);
     if (result.replayUrl) console.error(`    replay: ${result.replayUrl}`);
   }
 }
 
-// Nur als Skript ausfuehren (Sidecar) — nicht beim Import (Benchmark-Skript).
+// Run only as the CLI entry point, not when imported.
 if (
   import.meta.main ||
   (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href)
 ) {
-  // Graceful Shutdown: SIGTERM (kill_task) und SIGINT (Ctrl+C) geben erst
-  // aktive Cloud-Sessions frei, statt Slots stranden zu lassen.
+  // Release active cloud sessions on SIGTERM/SIGINT before exiting.
   process.on("SIGTERM", () => void shutdownGracefully("SIGTERM"));
   process.on("SIGINT", () => void shutdownGracefully("SIGINT (Ctrl+C)"));
   main().catch((err) => {

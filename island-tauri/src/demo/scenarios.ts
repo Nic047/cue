@@ -5,23 +5,9 @@ import type {
   PlanTask,
 } from "../lib/agent-state";
 
-/**
- * Demo-Szenarien (?demo-Harness): fahren den ECHTEN Store in exakt die
- * States, die die Prod-UI rendert — ohne Voice, ohne Task, ohne Option.
- *
- * States der aktuellen UI (Ambient-Regeln):
- *  - listening/transcribing: winzige Voice-Pill.
- *  - working + planMs==null: Planning-Shimmer (tritt per "plan"-Event
- *    auf Executing um — sequentiell, kein Stack).
- *  - working + planMs!=null: Executing-Indikator + Timer + Agent-Dots
- *    (Dots = tasks.length).
- *  - done: nur Summary + Details-Button; detailOpen=true = Overlay.
- *  - question: Frage-Dialog (phasenunabhaengig).
- * Trace-Listen/Steps rendert die Pill nicht mehr — die alten
- * step/taskStatus-Events existieren nur noch als Harness-Reserve.
- */
+/** Development scenarios exercise real UI states without voice or cloud calls. */
 
-/** Vollständiger Store-Schnappschuss für ein Szenario. */
+/** Complete store snapshot for a scenario. */
 export interface DemoState {
   phase: Phase;
   ack: string;
@@ -40,7 +26,7 @@ export interface DemoState {
   transcript: string;
 }
 
-/** Ein Demo-Event: wird im Stream-Modus eines pro Tick angewendet. */
+/** One event is applied per tick in streaming mode. */
 export type DemoEvent =
   | { kind: "step"; taskId: string; step: AgentStep }
   | {
@@ -57,7 +43,7 @@ export interface DemoScenario {
   id: string;
   label: string;
   initial: DemoState;
-  /** Falls gesetzt: läuft im Stream-Modus ein Event pro Tick. */
+  /** Optional event sequence for streaming mode. */
   script?: DemoEvent[];
 }
 
@@ -83,21 +69,21 @@ function base(over: Partial<DemoState>): DemoState {
 }
 
 const ANSWER =
-  "Das MacBook Pro 14″ (M5, 16 GB) gibt es bei MediaMarkt für €1.999,00 — €200 unter Apple Store (€2.199,00).";
+  "Example result: MacBook Pro 14″ is €1,999 at MediaMarkt, €200 below the Apple Store.";
 
 const DETAIL =
-  "MacBook Pro 14″ (M5, 16 GB, 512 GB) im Vergleich:\n\n" +
-  "- MediaMarkt: €1.999,00 (versandkostenfrei, sofort lieferbar)\n" +
-  "- Amazon.de: €2.049,00 (Marketplace-Händler, 2–3 Tage)\n" +
-  "- Apple Store: €2.199,00 (UVP, inkl. Gravur-Option)\n\n" +
-  "Alle Preise inkl. MwSt., Stand heute. Gewinner: MediaMarkt — und 2 weitere.";
+  "Illustrative MacBook Pro 14″ price comparison:\n\n" +
+  "- MediaMarkt: €1,999 (free shipping, in stock)\n" +
+  "- Amazon.de: €2,049 (marketplace seller, 2–3 days)\n" +
+  "- Apple Store: €2,199 (list price)\n\n" +
+  "Demo data only; these are not live prices. Lowest example price: MediaMarkt.";
 
-/** working-Basis: tasks steuern die Agent-Dots (tasks.length, max 4). */
+/** Working-state tasks drive the agent indicator. */
 function workingBase(
   over: Partial<DemoState> & { taskCount?: number },
 ): DemoState {
   const { taskCount = 1, ...rest } = over;
-  const titles = ["Amazon.com", "MediaMarkt", "Python-Skript"];
+  const titles = ["Amazon.com", "MediaMarkt", "Python script"];
   const tasks: PlanTask[] = Array.from({ length: taskCount }, (_, i) => ({
     id: `t${i + 1}`,
     type: i === 2 ? "sandbox" : "browser",
@@ -108,7 +94,7 @@ function workingBase(
   return base({
     phase: "working",
     ack: "Sure, checking that for you.",
-    transcript: "Vergleiche MacBook Preise",
+    transcript: "Compare MacBook prices",
     tasks,
     allSteps: [],
     ...rest,
@@ -153,27 +139,27 @@ export const SCENARIOS: DemoScenario[] = [
   },
   {
     id: "question",
-    label: "Panel · Rückfrage",
+    label: "Panel · Question",
     initial: base({
       phase: "working",
       ack: "One quick thing.",
       planMs: 1200,
-      transcript: "Vergleiche Preise",
+      transcript: "Compare prices",
       question: {
-        text: "Was möchtest du auf Product Hunt entdecken?",
-        options: ["Produkte entdecken", "Tech-Nachrichten lesen", "Ein Projekt vorstellen", "Nur stöbern"],
+        text: "What would you like to discover on Product Hunt?",
+        options: ["Discover products", "Read tech news", "Present a project", "Just browse"],
       },
     }),
   },
   {
     id: "done",
-    label: "Panel · Done + Antwort",
+    label: "Panel · Done + Answer",
     initial: base({
       phase: "done",
       ack: "Sure, checking Amazon for you.",
       planMs: 2400,
       totalMs: 18400,
-      transcript: "Vergleiche MacBook Preise auf Amazon",
+      transcript: "Compare MacBook prices on Amazon",
       tasks: [
         {
           id: "t1",
@@ -190,13 +176,13 @@ export const SCENARIOS: DemoScenario[] = [
   },
   {
     id: "done-detail",
-    label: "Panel · Detail-Overlay",
+    label: "Panel · Details",
     initial: base({
       phase: "done",
       ack: "Sure, checking Amazon for you.",
       planMs: 2400,
       totalMs: 18400,
-      transcript: "Vergleiche MacBook Preise auf Amazon",
+      transcript: "Compare MacBook prices on Amazon",
       tasks: [
         {
           id: "t1",
@@ -220,7 +206,7 @@ export const SCENARIOS: DemoScenario[] = [
       ack: "That one didn't make it.",
       planMs: 1900,
       totalMs: 22100,
-      transcript: "Prüfe irgendwas",
+      transcript: "Check a website",
       tasks: [
         {
           id: "t1",
@@ -232,12 +218,12 @@ export const SCENARIOS: DemoScenario[] = [
         },
       ],
       answer:
-        "Amazon hat den Bot-Check nicht bestanden — kein Ergebnis von dort. Versuch es später erneut.",
+        "Amazon blocked automated access. No result is available from that source; try again later.",
     }),
   },
 ];
 
-/** Wendet ein Demo-Event auf einen State an (pure Funktion, gut testbar). */
+/** Pure state update for a demo event. */
 export function applyDemoEvent(state: DemoState, ev: DemoEvent): DemoState {
   switch (ev.kind) {
     case "step":
@@ -272,7 +258,7 @@ export function applyDemoEvent(state: DemoState, ev: DemoEvent): DemoState {
   }
 }
 
-/** Kurzbeschreibung eines Events fürs Demo-Log. */
+/** Short event description for the demo log. */
 export function describeDemoEvent(ev: DemoEvent): string {
   switch (ev.kind) {
     case "step":

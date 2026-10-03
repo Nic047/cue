@@ -11,17 +11,13 @@ pub fn resize_window(app: AppHandle, width: f64, height: f64) -> Result<(), Stri
     apply_morph_frame(&win, gen, width, height)
 }
 
-/// Fenster komplett ausblenden (idle): Ein transparentes, aber gemapptes
-/// Fenster frisst sonst unsichtbar Mausklicks in seinem Rechteck.
-/// PILL_OPEN wird erst nach 700ms Grace geloescht, damit ein schneller
-/// Doppel-Escape (Pill zu + Task killen, Fenster: 600ms) das Frontend noch
-/// erreicht — sonst wuerde der zweite Druck schon ans System durchgereicht.
+/// Hide the window so it cannot intercept clicks. Retain Escape ownership briefly for double-Escape cancellation.
 static HIDE_GEN: AtomicU64 = AtomicU64::new(0);
 static WINDOW_HIDDEN: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(true);
 
 #[tauri::command]
 pub fn hide_window(app: AppHandle) -> Result<(), String> {
-    // Laufenden Morph stoppen (Generation wird ungueltig).
+    // Invalidate the active morph animation.
     let morph_gen = MORPH_GEN.fetch_add(1, Ordering::SeqCst) + 1;
     WINDOW_HIDDEN.store(true, Ordering::SeqCst);
     let gen = HIDE_GEN.fetch_add(1, Ordering::SeqCst) + 1;
@@ -40,10 +36,7 @@ pub fn hide_window(app: AppHandle) -> Result<(), String> {
     .map_err(|e| e.to_string())
 }
 
-/// Fenster wieder einblenden (listening/transcribing/working/done).
-/// Kein Fokus-Stehlen: Das Panel ist nonactivating (s. lib.rs).
-/// Re-assertet danach Level + Front-Order: Tauri-show nutzt plain
-/// orderFront, was das Panel hinter Fullscreen-Fenstern landen liesse.
+/// Show without activation and restore front ordering above full-screen windows.
 #[tauri::command]
 pub async fn show_window(
     app: AppHandle,
@@ -137,8 +130,7 @@ fn apply_morph_frame(
         .map_err(|e| e.to_string())
 }
 
-/// Monotoner Zaehler: nur die juengste Morph-Animation laeuft.
-/// Jeder neue morph_window/hide_window-Call macht alte Threads ungueltig.
+/// Only the latest animation generation may update the window.
 static MORPH_GEN: AtomicU64 = AtomicU64::new(0);
 
 #[cfg(all(debug_assertions, target_os = "macos"))]
@@ -382,23 +374,7 @@ mod display_tests {
     }
 }
 
-/// Fenster in EINEM IPC-Call per Feder-Physik auf Zielgroesse morphen.
-///
-/// WICHTIG: Es laeuft nur EINE Feder, nicht zwei getrennte auf (width,
-/// height). Zwei unabhaengige Federn mit identischer Stiffness/Damping
-/// sehen bei UNTERSCHIEDLICH GROSSEN Distanzen trotzdem versetzt aus,
-/// weil die kuerzere Strecke schlicht frueher "ankommt" als die laengere
-/// (z.B. Breite 220->560 vs. Hoehe 42->200: beide Achsen bewegen sich
-/// "gleichzeitig" im Sinne der Physik, aber die kuerzere Achse wirkt
-/// optisch frueher fertig -> man sieht "erst breiter, dann hoeher").
-///
-/// Fix: eine Feder laeuft auf einem normalisierten Fortschritt t (0..1),
-/// gedaempft gegen das Ziel 1.0. Breite und Hoehe werden in JEDEM Frame
-/// aus DEMSELBEN t interpoliert (lerp). Dadurch ist es UNMOEGLICH, dass
-/// eine Achse der anderen vorauslaeuft - beide haengen an derselben
-/// Zeitachse. Das Overshoot-Verhalten (leichtes "Ueberschwingen" durch
-/// Unterdaempfung) bleibt erhalten, wirkt jetzt aber auf beide Achsen
-/// exakt gleich proportional zu ihrer jeweiligen Distanz.
+/// Interpolate width and height from one spring progress value so both axes finish together, including overshoot.
 #[tauri::command]
 pub fn morph_window(app: AppHandle, width: f64, height: f64) -> Result<(), String> {
     let win = app.get_webview_window("main").ok_or("main window fehlt")?;
@@ -413,19 +389,12 @@ pub fn morph_window(app: AppHandle, width: f64, height: f64) -> Result<(), Strin
 
     std::thread::spawn(move || {
         const DT: f64 = 1.0 / 60.0;
-        // Etwas weicher als vorher (war 180/22), weil ein einzelner
-        // Fortschritts-Parameter das ganze Fenster bewegt statt zweier
-        // getrennter Achsen - bei gleicher Stiffness fuehlt sich ein
-        // kombinierter Spring sonst schneller/harter an, da beide
-        // Dimensionen gleichzeitig "mitgerissen" werden. Leichtes
-        // Overshoot bleibt bewusst erhalten (Damping < kritisch).
+        // Use a softly damped spring for the combined dimensions.
         const STIFFNESS: f64 = 170.0;
         const DAMPING: f64 = 24.0;
         const MAX_FRAMES: u64 = 90;
 
-        // t = 0 -> Startgroesse, t = 1 -> Zielgroesse. Eine einzige Feder
-        // zieht t Richtung 1.0; w/h werden daraus abgeleitet, niemals
-        // selbst gefedert.
+        // Derive both dimensions from the same spring progress (0 = start, 1 = target).
         let mut t: f64 = 0.0;
         let mut vt: f64 = 0.0;
         let t0 = std::time::Instant::now();
@@ -433,7 +402,7 @@ pub fn morph_window(app: AppHandle, width: f64, height: f64) -> Result<(), Strin
 
         loop {
             if MORPH_GEN.load(Ordering::SeqCst) != gen {
-                return; // von neuerem Morph abgeloest
+                return; // Superseded by a newer animation.
             }
 
             vt += (STIFFNESS * (1.0 - t) - DAMPING * vt) * DT;

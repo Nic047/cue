@@ -10,13 +10,7 @@ export function getAudioContext(): AudioContext {
 
 let gesturePrimed = false;
 
-/**
- * Weckt den AudioContext bei echten User-Gesten im Fenster (einmalig).
- * Der globale Shortcut allein ist KEINE User-Geste — ohne das kann die
- * Autoplay-Policy den Kontext auf "suspended" halten und jeder Sound
- * spielt stumm ab (z.B. wenn Bluetooth-Kopfhoerer aktiv sind und man nur
- * per Hotkey steuert). Einmal ins Fenster klicken behebt das dauerhaft.
- */
+/** Unlock the AudioContext through a real window gesture; global shortcuts do not satisfy autoplay policies. */
 export function primeAudioOnGesture() {
   if (gesturePrimed) return;
   gesturePrimed = true;
@@ -69,14 +63,13 @@ export async function playSound(
     try {
       await ctx.resume();
     } catch {
-      /* ignore — State-Check unten entscheidet */
+      /* The state check below reports failure. */
     }
   }
-  // Suspendiert spielen hiesse: stumm abspielen und so tun als ob. Lieber
-  // ein klarer Fehler, den der Aufrufer loggen kann.
+  // Report suspended audio rather than silently pretending playback succeeded.
   if (ctx.state !== "running") {
     throw new Error(
-      `Sound blockiert (AudioContext: ${ctx.state}) — einmal ins Fenster klicken, dann erneut versuchen.`,
+      `Sound blocked (AudioContext: ${ctx.state}). Click the window and try again.`,
     );
   }
 
@@ -84,7 +77,7 @@ export async function playSound(
   try {
     buffer = await decodeAudioData(dataUri);
   } catch (err) {
-    throw new Error(`Sound dekodieren fehlgeschlagen: ${err}`);
+    throw new Error(`Sound decoding failed: ${err}`);
   }
   const source = ctx.createBufferSource();
   const gain = ctx.createGain();

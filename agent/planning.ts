@@ -10,40 +10,40 @@ const TaskSchema = z.object({
   id: z
     .string()
     .default("")
-    .describe("Task-ID, z.B. 't1' (wird ggf. ergänzt)."),
+    .describe("Task ID, for example 't1'; filled automatically if missing."),
   type: z
     .enum(["browser", "sandbox"])
     .describe(
-      "browser: braucht eine echte Website/Suche im Web. " +
-        "sandbox: braucht Code-Ausführung, Datenverarbeitung, oder das Bauen/Testen von etwas.",
+      "browser: requires a real website or web search. " +
+        "sandbox: requires code execution, data processing, building, or testing.",
     ),
   title: z
     .string()
     .default("")
     .describe(
-      "Kurzer Titel für UI/Logs, z.B. 'Amazon.com' oder 'Python-Skript ausführen' (wird ggf. ergänzt).",
+      "Short UI/log title, such as 'Amazon.com' or 'Run Python'; filled if missing.",
     ),
   instruction: z
     .string()
     .describe(
-      "Vollständige, eigenständige Anweisung für den Agenten, inkl. aller relevanten Details aus der Nutzeranfrage.",
+      "Complete, self-contained agent instruction including all relevant details from the user's request.",
     ),
   source: z
     .string()
     .default("")
     .describe(
-      "Bei type=browser: erwartete Quelle/Website, falls bekannt, z.B. 'amazon.com'. " +
-        "Leerer String, wenn unbekannt oder type=sandbox.",
+      "For browser tasks: expected source, if known, such as 'amazon.com'. " +
+        "Empty string if unknown or for sandbox tasks.",
     ),
   stealth: z
     .boolean()
     .default(true)
     .describe(
-      "Nur bei type=browser. true (Default) für Seiten mit Bot-Abwehr " +
-        "(Amazon, Google, Shops, Logins, CAPTCHA-Verdacht): langsamer " +
-        "Stealth-Pool mit US-Proxy. false für einfache bot-freie Seiten " +
-        "(Beispiel-, Doku-, Blogseiten): schneller Headless-Pool, " +
-        "Start in ~1s statt Minuten.",
+      "Browser only. true (default) for sites with bot defenses " +
+        "(Amazon, Google, shops, logins, likely CAPTCHAs): slower " +
+        "stealth pool with a US proxy. false for simple public pages " +
+        "(examples, documentation, blogs): faster headless pool, " +
+        "with lower startup latency.",
     ),
 });
 
@@ -52,43 +52,43 @@ const PlanSchema = z.object({
     .string()
     .default("")
     .describe(
-      'SEHR kurzer Einleitungssatz an den Nutzer (max. 8 Woerter, Englisch, locker). Z.B. "Sure, checking Amazon for you." Keine Details, kein Plan.',
+      'A brief acknowledgment (at most 8 English words), such as "Sure, checking Amazon for you." No details or plan.',
     ),
   summary: z
     .string()
     .default("")
-    .describe("Ein Satz, was insgesamt gemacht wird."),
-  // Leerer String, wenn die Nachricht eine ausfuehrbare Aufgabe ist.
+    .describe("One sentence describing the overall task."),
+  // Empty for executable requests.
   note: z
     .string()
     .default("")
     .describe(
-      "NUR wenn keine ausfuehrbare Aufgabe erkannt wurde (Begruessung,small talk): kurzer Hinweis an den Nutzer, dass eine konkrete Anfrage noetig ist. Sonst leerer String.",
+      "Only for non-executable messages (greetings, small talk): briefly ask for a concrete task. Otherwise an empty string.",
     ),
   strategy: z
     .enum(["single", "parallel"])
     .describe(
-      "single: nur ein Task nötig. " +
-        "parallel: mehrere Tasks — unterschiedliche Infos oder mehrere Quellen für dieselbe Frage.",
+      "single: only one task is needed. " +
+        "parallel: multiple tasks for different facts or sources.",
     ),
   tasks: z.array(TaskSchema).max(MAX_PARALLEL_TASKS),
   mergeInstruction: z
     .string()
     .default("")
-    .describe("Anweisung fürs finale Zusammenführen der Ergebnisse."),
-  // Eine Rückfrage bei ausdrücklich gewünschter Auswahl oder nötiger Klärung.
+    .describe("Instruction for merging the final results."),
+  // Ask when the user requests a choice or necessary details are missing.
   question: z
     .object({
-      text: z.string().describe("Kurze, konkrete Frage an den Nutzer."),
+      text: z.string().describe("A short, specific question for the user."),
       options: z
         .array(z.string())
         .max(4)
-        .describe("Max. 4 kurze Antwort-Optionen zum Antippen."),
+        .describe("Up to four short options to select."),
     })
     .optional()
     .describe(
-      "Setzen, wenn der Nutzer ausdrücklich zuerst gefragt werden möchte oder eine nötige Angabe fehlt. " +
-        "Das question-Feld öffnet das interaktive Frage-Panel. Nicht nur in note behaupten, auf eine Antwort zu warten.",
+      "Set when the user explicitly asks to be questioned first or essential information is missing. " +
+        "The question field opens the interactive panel. Do not merely claim to be waiting in note.",
     ),
 });
 
@@ -96,63 +96,34 @@ export type Plan = z.infer<typeof PlanSchema>;
 export type Task = z.infer<typeof TaskSchema>;
 
 export async function planTasks(userRequest: string): Promise<Plan> {
-  const system = `Du bist der Planer für ein System aus parallelen Browser- und Sandbox-Agents.
-Zerlege die Nutzeranfrage in 1 bis ${MAX_PARALLEL_TASKS} konkrete, unabhängig voneinander ausführbare Tasks.
+  const system = `You plan work for parallel browser and sandbox agents.
+Split the user's request into one to ${MAX_PARALLEL_TASKS} concrete, independent tasks.
 
-Jeder Task braucht ein "type"-Feld:
-- "browser": die Aufgabe erfordert das Aufrufen einer echten Website (Preise
-  vergleichen, Informationen recherchieren, ein Formular ausfüllen, etc.)
-- "sandbox": die Aufgabe erfordert Code auszuführen, Daten zu verarbeiten,
-  etwas zu bauen/zu testen, oder eine Berechnung durchzuführen.
+Each task needs a type:
+- browser: visit a real website for research, price comparisons, or public searches. Do not plan purchases, account changes, or submission of personal information.
+- sandbox: execute code, process data, build or test something, or perform a calculation.
 
-Bei type=browser auch "stealth" setzen: true lassen bei Bot-Abwehr
-(Amazon, Google, Shops, Logins) — false nur, wenn die Zielseite sicher
-simpel/bot-frei ist. Im Zweifel true.
+For browser tasks, use stealth=true for sites with bot defenses (shops, search engines, login pages). Use false only for simple public documentation, examples, or blogs. Default to true if uncertain.
 
-WICHTIG: Ist die Nachricht KEINE ausfuehrbare Aufgabe (nur Begruessung wie
-"hallo", Small Talk, unklare Frage ohne konkreten Auftrag), setze tasks auf
-[] und fuelle das "note"-Feld mit einem kurzen Hinweis. Erfinde keine Task.
+If there is NO executable request (greeting, small talk, or no concrete objective), set tasks=[] and return a short note asking for a task. Never invent work.
 
-Regeln:
-- Jeder Task muss für sich allein verständlich sein (der Agent, der ihn ausführt, sieht NUR "instruction", nicht die ursprüngliche Nutzeranfrage).
-- PFLICHTFELDER, keines weglassen: summary, strategy, tasks — und pro Task id (z.B. "t1", "t2"), type, title, instruction.
-- Keinen gewünschten Teil stillschweigend weglassen. Fehlt eine nötige Angabe
-  (z.B. welche Website gemeint ist), triff die naheliegendste Annahme, schreibe
-  sie in die Task-instruction UND in mergeInstruction, damit die finale Antwort
-  die Annahme nennt. Nur wenn gar nichts Ausführbares dabei ist: tasks leer + note füllen.
-- Wenn der Nutzer ausdrücklich "frag mich zuerst", "biete Optionen an" oder
-  "warte auf meine Auswahl" verlangt, MUSST du question setzen. Das ist das
-  Frage-Tool dieses Systems: question.text und bis zu 4 kurze question.options
-  öffnen das interaktive Panel. Erfülle die gewünschte Anzahl bis maximal 4.
-  Setze note auf "". tasks darf [] sein, solange die Auswahl noch aussteht.
-  Beispiel: Python-Projekt nach Auswahl → question.text: "Welches Python-Projekt
-  möchtest du erstellen?", options: ["To-do-App", "Quiz", "Dateien sortieren", "Ausgaben-Tracker"].
-  Schreibe niemals nur "Ich warte auf deine Auswahl" in note oder in einen Task.
-- Ohne ausdrücklichen Wunsch nur fragen, wenn die Aufgabe ohne EINE klärende
-  Rückfrage nicht sinnvoll planbar ist. Bei Kleinigkeiten lieber annehmen.
-- Enthält die Anfrage bereits eine Antwort auf deine Rückfrage, berücksichtige
-  diese und plane die Umsetzung. Wiederhole die bereits beantwortete Frage nicht.
-  "Cue entscheidet" ist eine ausdrückliche Erlaubnis zur Auswahl, keine fehlende
-  Anfrage. Die ursprüngliche Aufgabe bleibt bestehen. Diese Antwort hat Vorrang
-  vor dem ursprünglichen Wunsch "frag mich zuerst": jetzt tasks planen, note leer,
-  question weglassen. Nenne die gewählte Annahme im Ergebnis.
-- strategy "parallel" nutzen, wenn mehrere Tasks nötig sind — sei es unterschiedliche Infos oder mehrere Quellen für dieselbe Frage (z.B. Preisvergleich).
-- strategy "single" nutzen, wenn ein Task reicht.
-- mergeInstruction soll eine vollständige Markdown-Antwort verlangen: bei verschiedenen
-  Themen separate Abschnitte mit allen angefragten Ergebnissen und Quellen. Eine sehr
-  kurze Antwort nur verlangen, wenn der Nutzer das ausdrücklich wünscht.
-- Erfinde keine Quellen/Schritte, die die Anfrage nicht impliziert.`;
+Rules:
+- Each task's instruction must be self-contained: its agent sees only that instruction, not the original request. Preserve the user's language for instructions and answers.
+- Include summary, strategy, tasks, and each task's id, type, title, and instruction.
+- Never silently omit part of the request. Make reasonable assumptions for minor missing details and record them in both instruction and mergeInstruction.
+- If the user explicitly asks to be questioned first, offered options, or to choose before work begins, you MUST set question. Its text and up to four short options open the interactive question panel. Honor the requested option count up to four. Set note=""; tasks may be empty while awaiting the choice. For example: "Which Python project would you like?", with "To-do app", "Quiz", "File organizer", "Expense tracker". Never merely write that you are waiting in note or in a task.
+- Otherwise, ask only when one clarification is essential to produce a useful plan.
+- If the request includes an answer to your question, use it and do not ask again. "Cue decides" explicitly delegates the choice; the original task still applies. This overrides an earlier request to ask first: plan tasks, leave note empty, omit question, and state the assumption in the result.
+- Use parallel for independent tasks or multiple sources, and single when one task suffices.
+- mergeInstruction must request a complete Markdown answer, with sections for separate topics, all requested results, and source links. Request a very short answer only if the user asked for one.
+- Do not invent sources or steps unrelated to the request.`;
 
-  // TEMPORÄR: Mercury kann kein Structured Output (Provider-Warnung) —
-  // dann manueller JSON-Pfad statt generateObject.
+  // Use manual JSON parsing for models without structured output support.
   if (PLANNER_MODEL.includes("mercury")) {
     return planTasksManualJson(system, userRequest);
   }
 
-  // Das Flash-Modell laesst gelegentlich Pflichtfelder weg (flaky
-  // structured output) — bis zu 3 Versuche statt sofort zu crashen.
-  // Kosmetische Luecken (id/title/summary) werden danach automatisch
-  // gefuellt; nur instruction bleibt hart Pflicht.
+  // Retry malformed output up to three times; fill display fields but require an instruction.
   let lastErr: unknown;
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
@@ -169,45 +140,42 @@ Regeln:
     } catch (err) {
       lastErr = err;
       console.error(
-        `Plan Versuch ${attempt} fehlgeschlagen${attempt < 3 ? ", Retry…" : "."}`,
+        `Plan attempt ${attempt} failed${attempt < 3 ? ", Retry…" : "."}`,
       );
     }
   }
   throw lastErr;
 }
 
-/** Kosmetische Plan-Lücken füllen (id/title/summary); instruction bleibt Pflicht. */
+/** Fill display fields; an executable instruction remains required. */
 function fillPlanGaps(plan: Plan): void {
   plan.tasks.forEach((t, i) => {
     if (!t.id) t.id = `t${i + 1}`;
     if (!t.title) t.title = t.instruction.slice(0, 40) || `Task ${i + 1}`;
   });
-  if (!plan.summary) plan.summary = `${plan.tasks.length} Task(s) ausführen.`;
+  if (!plan.summary) plan.summary = `${plan.tasks.length} task(s) to run.`;
 }
 
-/** JSON aus Modell-Text schälen (Code-Fences und Prosa tolerieren). */
+/** Extract JSON from optional code fences or surrounding prose. */
 function extractJson(text: string): unknown {
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
   const candidate = (fenced?.[1] ?? text).trim();
   const start = candidate.indexOf("{");
   const end = candidate.lastIndexOf("}");
-  if (start === -1 || end <= start) throw new Error("kein JSON gefunden");
+  if (start === -1 || end <= start) throw new Error("No JSON found");
   return JSON.parse(candidate.slice(start, end + 1));
 }
 
-/**
- * TEMPORÄRER manueller Planner für Modelle ohne Structured Output
- * (Mercury): roher Text → JSON.parse → Zod-Validierung → Repair-Retry.
- */
+/** Fallback planner: parse text as JSON, validate with Zod, then retry with repair feedback. */
 async function planTasksManualJson(
   system: string,
   userRequest: string,
 ): Promise<Plan> {
-  const shape = `Antworte AUSSCHLIESSLICH mit einem JSON-Objekt in exakt dieser Form (kein Markdown, keine Erklärung davor/danach):
-{"ack": string, "summary": string, "note": string, "strategy": "single|parallel", "tasks": [{"id": string, "type": "browser|sandbox", "title": string, "instruction": string, "source": string, "stealth": boolean}], "mergeInstruction": string, "question": {"text": string, "options": [max. 4 kurze Strings]} oder weglassen}
-"stealth": false bei simplen bot-freien Seiten (example.com, Dokus, Blogs), true bei Amazon/Google/Shops/Logins — im Zweifel true.
-"question" MUSS gesetzt werden, wenn der Nutzer zuerst gefragt werden oder Optionen auswählen möchte; sonst nur bei nötiger Klärung. Mit question darf tasks [] sein und note muss leer sein. Eine bereits beantwortete Rückfrage nicht wiederholen.
-Leere Strings wo unbekannt; "tasks": [] und "note" gefüllt, wenn KEINE ausführbare Aufgabe. Plane NIEMALS die Aufgabe selbst — nur Tasks beschreiben.`;
+  const shape = `Return ONLY a JSON object in this form, without Markdown or surrounding explanation:
+{"ack": string, "summary": string, "note": string, "strategy": "single|parallel", "tasks": [{"id": string, "type": "browser|sandbox", "title": string, "instruction": string, "source": string, "stealth": boolean}], "mergeInstruction": string, "question": {"text": string, "options": [up to 4 short strings]}}
+Omit question when no clarification is needed. Set stealth=false for simple public sites and true for sites with bot defenses; default to true.
+Set question when the user asks to choose or be asked first. While waiting, tasks may be empty and note must be empty. Never repeat an answered question.
+Use empty strings for unknown fields. Use tasks=[] and a short note only if there is NO executable request. Describe tasks; do not execute them yourself.`;
   let prompt = userRequest;
   let lastErr: unknown;
   for (let attempt = 1; attempt <= 3; attempt++) {
@@ -226,11 +194,11 @@ Leere Strings wo unbekannt; "tasks": [] und "note" gefüllt, wenn KEINE ausführ
     } catch (err) {
       lastErr = err;
       console.error(
-        `Plan (manuell) Versuch ${attempt} fehlgeschlagen${attempt < 3 ? ", Retry…" : "."}`,
+        `Manual plan attempt ${attempt} failed${attempt < 3 ? ", Retry…" : "."}`,
       );
       prompt =
-        `${userRequest}\n\nDeine letzte Antwort war kein gültiges Plan-JSON ` +
-        `(${String(err).slice(0, 200)}). Antworte NUR mit korrigiertem JSON in der vorgegebenen Form.`;
+        `${userRequest}\n\nYour last response was not valid plan JSON ` +
+        `(${String(err).slice(0, 200)}). Return ONLY corrected JSON in the required format.`;
     }
   }
   throw lastErr;

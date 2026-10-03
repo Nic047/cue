@@ -3,12 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import remarkGfm from "remark-gfm";
 import { openUrl } from "@tauri-apps/plugin-opener";
 
-/**
- * Markdown-Anzeige fuer Results (Summary + Detail): GFM-Tabellen,
- * Listen, Code — kein rohes HTML (react-markdown rendert keins, XSS-safe).
- * Links oeffnen sicher in der Standard-App statt in der WebView.
- * Look kommt aus `.md-results` in index.css (Dark-Theme).
- */
+/** GFM result rendering without raw HTML. Validated links open outside the WebView. */
 export function Markdown({ text }: { text: string }) {
   return (
     <div className="md-results">

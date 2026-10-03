@@ -1,6 +1,4 @@
-//! Sidecar-Bridge: started den island-agent (Orchestrator als compiled
-//! Node-Runtime) und streamed seine JSONL-Events als Tauri-Events ins
-//! Frontend. stdout = reine JSONL-Events, stderr = menschliche Logs.
+//! Launch the Node sidecar and forward JSONL stdout events; human-readable logs use stderr.
 
 use std::io::{BufRead, BufReader, Write};
 use std::process::{Child, ChildStdin, Command, Stdio};
@@ -15,18 +13,14 @@ pub struct OrchestratorState {
     pub stdin: Mutex<Option<ChildStdin>>,
 }
 
-/// Laufende Orchestrator-Generation: Jeder neue run_task UND jede kill_task
-/// macht alte Reader-Threads stumm. So kann kein gekillter oder ueberholter
-/// Lauf mehr Events emitten, fremde Child-Handles anfassen (wait/drop) oder
-/// ein falsches orchestrator-done ausloesen, das die UI mitten im neuen Lauf
-/// zuruecksetzt — und ein spaetes answer oeffnet nicht mehr "random" die Pill.
+/// Each run or cancellation invalidates old readers, preventing stale events and cleanup from affecting a newer run.
 static RUN_GEN: AtomicU64 = AtomicU64::new(0);
 
 #[tauri::command]
 pub fn run_task(app: AppHandle, task: String) -> Result<(), String> {
-    // Alten Lauf killen, falls einer haengt.
+    // Stop any previous run.
     kill_task(app.clone())?;
-    // Neue Generation: alte Reader-Threads (falls noch am Leben) verstummen.
+    // Invalidate readers from older runs.
     let gen = RUN_GEN.fetch_add(1, Ordering::SeqCst) + 1;
 
     let resources = app.path().resource_dir().map_err(|e| e.to_string())?;
@@ -85,29 +79,22 @@ pub fn run_task(app: AppHandle, task: String) -> Result<(), String> {
     let mut child = command
         .arg(&task)
         .current_dir(&project_dir)
-        .stdin(Stdio::piped()) // für answer_question (Rückfrage-Antworten)
+        .stdin(Stdio::piped()) // Question responses arrive on stdin.
         .stdout(Stdio::piped())
-        .stderr(Stdio::inherit()) // menschliche Logs direkt ins Terminal
+        .stderr(Stdio::inherit()) // Human-readable logs go to stderr.
         .spawn()
-        .map_err(|e| format!("Sidecar-Start fehlgeschlagen: {e}"))?;
+        .map_err(|e| format!("Sidecar start failed: {e}"))?;
 
-    eprintln!(
-        "[island] Orchestrator gestartet (pid {}): {}",
-        child.id(),
-        task
-    );
+    eprintln!("[island] Orchestrator started (pid {})", child.id());
 
     let stdout = child.stdout.take().expect("stdout piped");
     let stdin = child.stdin.take().expect("stdin piped");
     *app.state::<OrchestratorState>().child.lock().unwrap() = Some(child);
     *app.state::<OrchestratorState>().stdin.lock().unwrap() = Some(stdin);
-    // Ab jetzt: Escape gehoert uns (auch bei versteckter Pill), bis der
-    // Lauf endet oder gekillt wird.
+    // Intercept Escape until the task finishes or is cancelled.
     global_shortcut::set_task_active(true);
 
-    // Lese-Thread: JSONL-Zeilen -> Tauri-Events.
-    // Gehoert strikt zu DIESER Generation: bei Kill oder neuem Lauf sofort
-    // still beenden, ohne State anzufassen oder done zu melden.
+    // This reader belongs to one generation; stop silently when superseded.
     std::thread::spawn(move || {
         let reader = BufReader::new(stdout);
         for line in reader.lines() {
@@ -118,18 +105,18 @@ pub fn run_task(app: AppHandle, task: String) -> Result<(), String> {
             if line.trim().is_empty() {
                 continue;
             }
-            // Validieren, dass es JSON ist, bevor wir es emitten.
+            // Validate JSON before forwarding it.
             if serde_json::from_str::<serde_json::Value>(&line).is_ok() {
                 let _ = app.emit("orchestrator-event", line);
             } else {
-                eprintln!("[island] Ungueltige stdout-Zeile: {line}");
+                eprintln!("[island] Ignoring malformed sidecar output");
             }
         }
-        // Nur der aktuelle Lauf darf aufraeumen + done melden.
+        // Only the current run may clean up and emit completion.
         if RUN_GEN.load(Ordering::SeqCst) != gen {
             return;
         }
-        // Stream zu => Prozess fertig. Aufräumen.
+        // The stream ended; clean up the process.
         let mut exit_error = None;
         if let Some(state) = app.try_state::<OrchestratorState>() {
             let mut guard = state.child.lock().unwrap();
@@ -167,20 +154,17 @@ pub fn run_task(app: AppHandle, task: String) -> Result<(), String> {
 
 #[tauri::command]
 pub fn kill_task(app: AppHandle) -> Result<(), String> {
-    // Generation zuerst bumpen: Der Reader des sterbenden Laufs verstummt
-    // sofort, egal wie lange kill/wait noch brauchen.
+    // Invalidate the old reader before waiting for process shutdown.
     RUN_GEN.fetch_add(1, Ordering::SeqCst);
-    // Task als beendet markieren: Escape geht wieder normal ans System.
+    // Release task ownership of Escape.
     global_shortcut::set_task_active(false);
     let state = app.state::<OrchestratorState>();
-    // stdin-Handle zuerst droppen (Writer schließen), dann killen.
+    // Close stdin before stopping the process.
     *state.stdin.lock().unwrap() = None;
     if let Some(mut child) = state.child.lock().unwrap().take() {
         let pid = child.id();
         eprintln!("[island] Kill Orchestrator (pid {pid})");
-        // Graceful zuerst: SIGTERM gibt dem Sidecar ~5s, um Cloud-Sessions
-        // sauber freizugeben (sonst strandete Slots bis zum Idle-Timeout und
-        // blockieren irgendwann neue Launches). Erst dann SIGKILL.
+        // Allow five seconds for SIGTERM cleanup before using SIGKILL.
         #[cfg(unix)]
         unsafe {
             libc::kill(pid as libc::pid_t, libc::SIGTERM);
@@ -203,24 +187,23 @@ pub fn kill_task(app: AppHandle) -> Result<(), String> {
     Ok(())
 }
 
-/// Antwort auf eine Orchestrator-Rückfrage (question-Event) an den
-/// Sidecar-prozess weiterreichen (eine Zeile via stdin).
+/// Send a question response to the sidecar as one stdin line.
 #[tauri::command]
 pub fn answer_question(app: AppHandle, text: String) -> Result<(), String> {
     let state = app.state::<OrchestratorState>();
     let mut guard = state.stdin.lock().unwrap();
     match guard.as_mut() {
         Some(stdin) => {
-            eprintln!("[island] Rückfrage-Antwort: {text}");
+            eprintln!("[island] Question response sent");
             stdin
                 .write_all(format!("{text}\n").as_bytes())
-                .map_err(|e| format!("stdin-Write fehlgeschlagen: {e}"))?;
+                .map_err(|e| format!("stdin write failed: {e}"))?;
             stdin
                 .flush()
-                .map_err(|e| format!("stdin-Flush fehlgeschlagen: {e}"))?;
+                .map_err(|e| format!("stdin flush failed: {e}"))?;
             Ok(())
         }
-        None => Err("kein laufender Orchestrator (stdin)".to_string()),
+        None => Err("No running orchestrator (stdin)".to_string()),
     }
 }
 

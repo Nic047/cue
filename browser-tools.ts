@@ -2,12 +2,7 @@ import {
   waitWithTimeout,
   WaitTimeoutError,
 } from "./shared/wait-with-timeout.js";
-/**
- * Generische Playwright-Tools für den Browser-Agenten.
- * Jedes Tool bildet genau eine Browser-Aktion ab; das Modell entscheidet pro
- * Aufgabe, welche Seite/Selektor/Reihenfolge. Quelle:
- * https://docs.getsolari.com/browser-api
- */
+/** Remote Playwright tools. See https://docs.getsolari.com/browser-api. */
 import { tool } from "ai";
 import { type BrowserSession } from "@solarisdk/browser";
 import { z } from "zod";
@@ -15,15 +10,22 @@ import type { Page } from "patchright-core";
 
 export interface ToolContext {
   browser: BrowserSession;
-  /** Aktuell aktive Seite. Tools mutieren dies bei new_tab. */
+  /** Active page; new_tab updates it. */
   page: Page;
-  /** Setzt der Agent, um Tool-Aktivitäten sichtbar zu machen. */
+  /** Optional UI progress callback. */
   hooks?: {
     onToolDone?: (tool: string, ok: boolean, target?: string) => void;
   };
 }
 
 const TOOL_TIMEOUT_MS = 90_000;
+
+function validateNavigationUrl(value: string) {
+  const url = new URL(value);
+  if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) {
+    throw new Error('Use an HTTP(S) URL without embedded credentials.');
+  }
+}
 
 function result(ok: boolean, data: Record<string, unknown> = {}) {
   return { ok, ...data };
@@ -60,24 +62,24 @@ export function buildBrowserTools(ctx: ToolContext) {
   return {
     navigate: tool({
       description:
-        "Navigiere die aktuelle Seite zu einer URL. Nutze das für den ersten " +
-        "Schritt jeder Aufgabe und für jeden weiteren Seitenwechsel.",
+        "Navigate the active page to a URL. Use for the first " +
+        "step of each task and subsequent page navigation.",
       inputSchema: z.object({
-        url: z.string().describe("Vollständige URL inkl. https://"),
+        url: z.string().describe("Full URL including https://"),
         waitUntil: z
           .enum(["load", "domcontentloaded", "networkidle"])
           .default("domcontentloaded")
           .describe(
-            "domcontentloaded reicht für die meisten Fälle und ist schneller. " +
-              "networkidle nur bei SPAs verwenden.",
+            "domcontentloaded is usually sufficient and faster. " +
+              "Use networkidle only for single-page apps.",
           ),
       }),
       execute: async ({ url, waitUntil }) =>
         run(
           "navigate",
           async () => {
-            // Erstversuch wie angefragt, danach ein Retry mit großzügigerem
-            // Timeout, BEVOR das Modell auf eine andere Quelle ausweicht.
+            validateNavigationUrl(url);
+            // Retry the same source with a longer timeout before reporting failure.
             try {
               await ctx.page.goto(url, { waitUntil, timeout: 20_000 });
             } catch {
@@ -94,29 +96,28 @@ export function buildBrowserTools(ctx: ToolContext) {
           },
           url,
         ).catch((err) => {
-          // Fehler NICHT werfen: als strukturiertes Ergebnis ans Modell
-          // melden, damit der Loop weiterlaufen kann.
+          // Return structured errors so the model can recover.
           return {
             ok: false,
             error: String(err),
             note:
-              "URL nach zwei Versuchen nicht erreichbar. Melde das als " +
-              "'nicht abrufbar' für diese Quelle — nutze KEINEN Wert von " +
-              "einer anderen Seite als Ersatz.",
+              "URL unavailable after two attempts. Report " +
+              "this source as unavailable; do NOT substitute a value from " +
+              "another website.",
           };
         }),
     }),
 
     scroll: tool({
       description:
-        "Scrollt die Seite, um zu Inhalten weiter unten zu gelangen, bevor " +
-        "du read_page erneut aufrufst.",
+        "Scroll to content farther down the page before " +
+        "calling read_page again.",
       inputSchema: z.object({
         direction: z.enum(["down", "up", "top", "bottom"]).default("down"),
         amount: z
           .number()
           .default(800)
-          .describe("Pixel pro Scroll-Schritt bei down/up."),
+          .describe("Pixels per down/up scroll."),
       }),
       execute: async ({ direction, amount }) =>
         run(
@@ -142,12 +143,12 @@ export function buildBrowserTools(ctx: ToolContext) {
 
     wait: tool({
       description:
-        "Warte eine kurze Zeit (nicht schlafen, sondern Geduld). Nutze das bei " +
-        "Bot-Checks (CAPTCHA/PerimeterX/Cloudflare), die sich von selbst " +
-        "aufloesen, oder bei Seiten, die per JS nachladen. Danach IMMER " +
-        "read_page erneut aufrufen.",
+        "Wait briefly for " +
+        "browser challenges (CAPTCHA/PerimeterX/Cloudflare) that may " +
+        "resolve automatically, or dynamically loading pages. ALWAYS " +
+        "call read_page afterward.",
       inputSchema: z.object({
-        ms: z.number().default(5000).describe("Wartezeit in Millisekunden."),
+        ms: z.number().int().min(0).max(30_000).default(5000).describe("Wait duration in milliseconds."),
       }),
       execute: async ({ ms }) => {
         await ctx.page.waitForTimeout(Math.min(ms, 30_000));
@@ -157,17 +158,17 @@ export function buildBrowserTools(ctx: ToolContext) {
 
     read_page: tool({
       description:
-        "Lies die aktuelle Seite: sichtbaren Text und alle Links. Rufe das " +
-        "IMMER nach navigate() auf, bevor du klickst oder tippst. Wenn " +
-        "'truncated: true' kommt und das Gesuchte fehlt: scroll + erneut lesen.",
+        "Read the active page's visible text and links. " +
+        "ALWAYS call after navigate(), before clicking or typing. If " +
+        "truncated=true and requested information is missing, scroll and read again.",
       inputSchema: z.object({
-        maxChars: z.number().default(8000).describe("Max Zeichen."),
-        offset: z.number().default(0).describe("Zeichen-Index."),
+        maxChars: z.number().int().min(1).max(50_000).default(8000).describe("Max characters."),
+        offset: z.number().int().min(0).default(0).describe("Character offset."),
         waitForNetworkIdle: z
           .boolean()
           .default(true)
           .describe(
-            "Kurz auf Netzwerk-Ruhe warten. Bei chatty Seiten auf false.",
+            "Briefly wait for network idle; use false on constantly active pages.",
           ),
       }),
       execute: async ({ maxChars, offset, waitForNetworkIdle }) =>
@@ -180,7 +181,7 @@ export function buildBrowserTools(ctx: ToolContext) {
                   timeout: 2500,
                 });
               } catch {
-                // Timeout ist hier kein Fehler — einfach lesen, was da ist.
+                // Read available content even if network idle times out.
               }
             }
             const fullText = await ctx.page.locator("body").innerText();
@@ -213,11 +214,11 @@ export function buildBrowserTools(ctx: ToolContext) {
 
     click: tool({
       description:
-        "Klicke ein Element. Bevorzuge role-basierte oder Text-Selektoren " +
-        "(z.B. 'text=Weiter') gegenüber generischen CSS-Klassen.",
+        "Click an element. Prefer role or text selectors " +
+        "(for example 'text=Next') over generic CSS classes.",
       inputSchema: z.object({
-        selector: z.string().describe("Playwright-Selector-String"),
-        timeoutMs: z.number().default(5000),
+        selector: z.string().describe("Playwright selector string"),
+        timeoutMs: z.number().int().min(1).max(30_000).default(5000),
       }),
       execute: async ({ selector, timeoutMs }) =>
         run(
@@ -235,14 +236,14 @@ export function buildBrowserTools(ctx: ToolContext) {
 
     type_text: tool({
       description:
-        "Schreibe Text in ein Eingabefeld (ersetzt vorhandenen Inhalt).",
+        "Fill an input field, replacing its existing value.",
       inputSchema: z.object({
         selector: z.string(),
         text: z.string(),
         pressEnter: z
           .boolean()
           .default(false)
-          .describe("Enter danach drücken, z.B. um eine Suche abzuschicken."),
+          .describe("Press Enter afterward, for example to submit a public search."),
       }),
       execute: async ({ selector, text, pressEnter }) =>
         run(
@@ -259,8 +260,8 @@ export function buildBrowserTools(ctx: ToolContext) {
 
     screenshot: tool({
       description:
-        "Screenshot der sichtbaren Seite als Base64-JPEG. Nur nutzen, wenn " +
-        "read_page nicht reicht (Canvas-UIs, Karten). Kostet mehr Tokens.",
+        "Capture the page as a base64 JPEG. Use only when " +
+        "read_page is insufficient (canvas interfaces, maps). Uses more tokens.",
       inputSchema: z.object({ fullPage: z.boolean().default(false) }),
       execute: async ({ fullPage }) =>
         run(
@@ -283,14 +284,14 @@ export function buildBrowserTools(ctx: ToolContext) {
 
     evaluate_js: tool({
       description:
-        "Führe einen JS-Ausdruck in der Seite aus und gib das Ergebnis " +
-        "zurück. Für strukturierte Extraktion, die über einfaches Lesen " +
-        "hinausgeht.",
+        "Evaluate JavaScript inside the remote page and return " +
+        "the result for structured extraction beyond " +
+        "simple reading.",
       inputSchema: z.object({
         expression: z
           .string()
           .describe(
-            "JS-Funktionskörper als String, z.B. 'return document.title'",
+            "JavaScript function body, for example 'return document.title'",
           ),
       }),
       execute: async ({ expression }) =>
@@ -308,13 +309,14 @@ export function buildBrowserTools(ctx: ToolContext) {
 
     new_tab: tool({
       description:
-        "Öffne einen neuen Tab und wechsle zu ihm. Nützlich, um mehrere " +
-        "Websites parallel offen zu halten.",
+        "Open a new active tab to keep multiple " +
+        "websites open at once.",
       inputSchema: z.object({ url: z.string().optional() }),
       execute: async ({ url }) =>
         run(
           "new_tab",
           async () => {
+            if (url !== undefined) validateNavigationUrl(url);
             const context = ctx.browser.contexts()[0];
             const newPage = await waitWithTimeout(
               context.newPage(),

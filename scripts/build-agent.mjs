@@ -11,6 +11,7 @@ const destinationRoot = join(root, 'island-tauri/src-tauri/resources/agent-runti
 const output = destinationRoot + '.staging-' + process.pid;
 await mkdir(output, { recursive: true });
 try {
+  await writeFile(join(output, '.gitkeep'), '');
   await cp(process.execPath, join(output, 'node'));
   await chmod(join(output, 'node'), 0o755);
   let licensed = false;
