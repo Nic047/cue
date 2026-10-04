@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="840" viewBox="0 0 1280 840">
+  <rect width="1280" height="840" fill="#161616"/>
+  <g font-family="Arial, sans-serif" text-anchor="middle">
+    <text x="640" y="164" fill="#f1f1f1" font-size="52" font-weight="600">A little help. Right at home.</text>
+    <text x="640" y="244" fill="#999999" font-size="26" font-weight="400">Drag cue into Applications to get started.</text>
+    <text x="640" y="744" fill="#929292" font-size="24" font-weight="400">Say what you want done. Keep working.</text>
+  </g>
+  <g fill="#242424">
+    <rect x="200" y="324" width="240" height="240" rx="52"/>
+    <rect x="840" y="324" width="240" height="240" rx="52"/>
+  </g>
+  <g fill="none" stroke="#777777" stroke-linecap="round" stroke-linejoin="round" stroke-width="3">
+    <path d="M584 444h108"/>
+    <path d="m674 425 19 19-19 19"/>
+  </g>
+</svg>

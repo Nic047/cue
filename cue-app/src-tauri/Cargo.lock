@@ -828,7 +828,7 @@ checksum = "52560adf09603e58c9a7ee1fe1dcb95a16927b17c127f0ac02d6e768a0e25bc1"
 
 [[package]]
 name = "cue"
-version = "0.1.7"
+version = "0.1.8"
 dependencies = [
  "base64 0.22.1",
  "block2",
@@ -847,6 +847,7 @@ dependencies = [
  "tauri-nspanel",
  "tauri-plugin-opener",
  "tauri-plugin-updater",
+ "tokio",
 ]
 
 [[package]]

@@ -13,11 +13,11 @@ Updater signatures authenticate app updates. They are separate from Apple Develo
 ## Publish a release
 
 1. Set the same new version in `cue-app/package.json`, `cue-app/src-tauri/Cargo.toml` and `cue-app/src-tauri/tauri.conf.json`. Refresh the lockfiles and commit the source.
-2. Push a matching tag, such as `v0.1.7`, or manually run **Release macOS** against the desired commit.
+2. Push a matching tag, such as `v0.1.8`, or manually run **Release macOS** against the desired commit.
 3. Wait for the release to finish. It publishes `cue-apple-silicon.dmg`, `cue.app.tar.gz`, its `.sig`, and `latest.json`.
 4. Once the release exists, use `https://github.com/Nic047/cue/releases/latest/download/cue-apple-silicon.dmg` for the website's download button. Keep old download links working.
 
-The in-app updater checks `https://github.com/Nic047/cue/releases/latest/download/latest.json`. It checks at launch and exposes **Check for updates…** in the menu bar and Settings. Installation is explicit, blocked while a task is active, verifies the archive signature, and restarts cue.
+The in-app updater checks `https://github.com/Nic047/cue/releases/latest/download/latest.json`. It checks at launch and every six hours. **One update available** appears in the menu bar only when an update is found; Settings shows the same availability. Installation is explicit, blocked while a task is active, verifies the archive signature, and restarts cue.
 
 Users on 0.1.6 or earlier need to manually install the first updater-enabled release once. Their credentials, preferences and chat history retain the existing app identifier and storage keys.
 

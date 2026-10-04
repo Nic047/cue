@@ -543,7 +543,8 @@ pub fn finish_onboarding(app: AppHandle, state: State<'_, OnboardingState>) -> R
     drop(prefs);
     super::global_shortcut::set_enabled(true);
     if let Some(tray) = app.tray_by_id("main") {
-        if let Ok(menu) = super::build_tray_menu(&app) {
+        if let Ok((menu, update_item)) = super::build_tray_menu(&app) {
+            super::updates::replace_menu_item(&app, menu.clone(), update_item);
             let _ = tray.set_menu(Some(menu));
         }
     }

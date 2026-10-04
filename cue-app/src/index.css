@@ -562,7 +562,8 @@ body,
 .recent-header h2 { margin: 5px 0 0; font-size: 16px; font-weight: 500; }
 .recent-close { display: grid; place-items: center; width: 28px; height: 28px; border: 0; border-radius: 7px; color: #888; background: #1c1c1c; cursor: pointer; }
 .recent-close:hover { color: #eee; background: #292929; }
-.recent-list { min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.recent-list { min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; -ms-overflow-style: none; }
+.recent-list::-webkit-scrollbar { display: none; }
 .recent-chat-item { display: flex; align-items: center; gap: 12px; width: 100%; padding: 13px 10px; border: 0; border-bottom: 1px solid #222; border-radius: 6px; background: transparent; color: inherit; text-align: left; cursor: pointer; }
 .recent-chat-item:last-child { border-bottom-color: transparent; }
 .recent-chat-icon { flex: none; display: grid; place-items: center; width: 30px; height: 30px; color: #777; background: #1c1c1c; border-radius: 7px; }
@@ -570,8 +571,6 @@ body,
 .recent-chat-title, .recent-chat-preview { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .recent-chat-title { font-size: 13px; font-weight: 500; }
 .recent-chat-preview { font-size: 11px; color: #777; }
-.recent-chat-trailing { display: flex; align-items: center; gap: 8px; color: #555; }
-.recent-chat-trailing small { font-size: 9px; color: #777; }
 .recent-empty { display: grid; justify-items: center; gap: 10px; padding: 44px 16px; color: #777; font-size: 11px; }
 .recent-empty p { color: #ccc; font-size: 13px; margin: 0; }
 .recent-chat-item:focus-visible, .recent-close:focus-visible { outline: 1px solid #888; outline-offset: -1px; }

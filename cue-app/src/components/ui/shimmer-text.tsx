@@ -7,8 +7,8 @@
 const __TRANSITION_STYLES = `
 :root {
   --shimmer-dur: 3200ms;
-  --shimmer-base: #6e6e6e;
-  --shimmer-highlight: #ededed;
+  --shimmer-base: #b8b8b8;
+  --shimmer-highlight: #fff;
   --shimmer-band: 200%;
   --shimmer-ease: ease-in-out;
 }

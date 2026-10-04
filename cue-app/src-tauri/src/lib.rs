@@ -39,20 +39,13 @@ fn acquire_instance_lock(app: &tauri::AppHandle) -> std::io::Result<Option<std::
     }
 }
 
-fn build_tray_menu(app: &tauri::AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
+fn build_tray_menu(
+    app: &tauri::AppHandle,
+) -> tauri::Result<(Menu<tauri::Wry>, MenuItem<tauri::Wry>)> {
     let menu = Menu::new(app)?;
     let recent = MenuItem::with_id(app, "recent-chats", "Recent Chats…", true, None::<&str>)?;
     menu.append(&recent)?;
-    let update = MenuItem::with_id(app, "updates", "Check for updates…", true, None::<&str>)?;
-    menu.append(&update)?;
-    let handle = app.clone();
-    tauri::async_runtime::spawn(async move {
-        if let Ok(info) = updates::check_update(handle).await {
-            if let Some(version) = info.version {
-                let _ = update.set_text(format!("Update to {version}…"));
-            }
-        }
-    });
+    let update = MenuItem::with_id(app, "updates", "One update available", true, None::<&str>)?;
     menu.append(&MenuItem::with_id(
         app,
         "settings",
@@ -81,7 +74,7 @@ fn build_tray_menu(app: &tauri::AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
         None::<&str>,
     )?)?;
     menu.append(&quit)?;
-    Ok(menu)
+    Ok((menu, update))
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -91,9 +84,8 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_nspanel::init())
         .invoke_handler(tauri::generate_handler![
-            updates::check_update,
-            updates::install_update,
-            updates::open_updates,
+            updates::get_update_status,
+            updates::update_action,
             onboarding::onboarding_status,
             onboarding::dismiss_setup,
             onboarding::restart_for_permissions,
@@ -224,14 +216,16 @@ pub fn run() {
 
             // Use a monochrome template icon that adapts to the menu bar.
             // Left click routes through the frontend shortcut handler; right click opens the menu.
-            let menu = build_tray_menu(app.handle())?;
+            let (menu, update_item) = build_tray_menu(app.handle())?;
+            updates::initialize(app.handle(), menu.clone(), update_item);
+            updates::monitor(app.handle().clone());
             let icon = tauri::image::Image::from_bytes(include_bytes!("../icons/tray-icon.png"))?;
             tauri::tray::TrayIconBuilder::with_id("main")
                 .icon(icon)
                 .icon_as_template(true)
                 .tooltip("cue")
                 .menu(&menu)
-                .on_menu_event(|app, event| {
+                .on_menu_event(move |app, event| {
                     let id = event.id.as_ref();
                     #[cfg(all(debug_assertions, target_os = "macos"))]
                     if id == "simulate-notch" {
@@ -245,9 +239,12 @@ pub fn run() {
                         return;
                     }
                     if id == "updates" {
-                        if let Err(error) = updates::open(app) {
-                            eprintln!("[cue] Update window: {error}");
-                        }
+                        let app = app.clone();
+                        tauri::async_runtime::spawn(async move {
+                            if let Err(error) = updates::menu_action(app).await {
+                                eprintln!("[cue] Update check failed: {error}");
+                            }
+                        });
                         return;
                     }
                     if id == "settings" {

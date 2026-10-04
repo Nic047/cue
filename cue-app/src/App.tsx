@@ -47,8 +47,9 @@ const RECENT_CHATS_H = 380;
 function presentWindow(
   size: { width: number; height: number },
   animate = false,
+  focus = false,
 ) {
-  return invoke("show_window", { ...size, animate });
+  return invoke("show_window", { ...size, animate, focus });
 }
 
 // Keep the icon fixed and center status text in the remaining space.
@@ -417,7 +418,7 @@ export default function App() {
     }
     if (recentChatsOpen) {
       recentMenuWasOpenRef.current = true;
-      void presentWindow({ width: RECENT_CHATS_W, height: RECENT_CHATS_H });
+      void presentWindow({ width: RECENT_CHATS_W, height: RECENT_CHATS_H }, false, true);
       return;
     }
     if (recentMenuWasOpenRef.current) {

@@ -1,4 +1,4 @@
-import { ArrowUpRight, MessageSquare, Trash2, X } from "lucide-react";
+import { MessageSquare, Trash2, X } from "lucide-react";
 import type { RecentChat } from "../lib/agent-state";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "./ui/context-menu";
 
@@ -12,7 +12,7 @@ export function RecentChatsDialog({ items, notchHeight, onOpen, onDelete, onClos
       <button className="recent-close" aria-label="Close recent chats" onClick={onClose}><X size={16} /></button>
     </header>
     <div className="recent-list">
-      {items.length ? items.map((chat, index) => <ContextMenu key={chat.id}>
+      {items.length ? items.map((chat) => <ContextMenu key={chat.id}>
         <ContextMenuTrigger asChild>
           <button className="recent-chat-item" onClick={() => onOpen(chat.id)}>
             <span className="recent-chat-icon"><MessageSquare size={15} strokeWidth={1.5} /></span>
@@ -20,7 +20,6 @@ export function RecentChatsDialog({ items, notchHeight, onOpen, onDelete, onClos
               <span className="recent-chat-title">{chat.title}</span>
               <span className="recent-chat-preview">{chat.transcript || chat.answer}</span>
             </span>
-            <span className="recent-chat-trailing">{index === 0 && <small>Latest</small>}<ArrowUpRight size={14} /></span>
           </button>
         </ContextMenuTrigger>
         <ContextMenuContent className="recent-context-menu">

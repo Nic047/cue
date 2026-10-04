@@ -1,6 +1,6 @@
 [package]
 name = "cue"
-version = "0.1.7"
+version = "0.1.8"
 description = "cue macOS AI assistant"
 authors = ["cue contributors"]
 edition = "2021"
@@ -34,6 +34,7 @@ reqwest = { version = "0.12", default-features = false, features = ["json", "mul
 objc2-foundation = "0.3"
 block2 = "0.6"
 tauri-plugin-updater = "2"
+tokio = { version = "1", features = ["time"] }
 
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration

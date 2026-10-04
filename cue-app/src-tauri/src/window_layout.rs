@@ -4,6 +4,17 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 use tauri::{AppHandle, Emitter, Manager};
 
+#[cfg(target_os = "macos")]
+#[link(name = "CoreGraphics", kind = "framework")]
+extern "C" {
+    fn CGDisplayIsBuiltin(display: u32) -> u32;
+}
+
+// NSScreen lists the menu-bar display first, which is also our clamshell fallback.
+fn preferred_display_index(mut built_in: impl Iterator<Item = bool>) -> usize {
+    built_in.position(|is_builtin| is_builtin).unwrap_or(0)
+}
+
 #[tauri::command]
 pub fn resize_window(app: AppHandle, width: f64, height: f64) -> Result<(), String> {
     let gen = MORPH_GEN.fetch_add(1, Ordering::SeqCst) + 1;
@@ -129,6 +140,7 @@ pub async fn show_window(
     width: f64,
     height: f64,
     animate: bool,
+    focus: Option<bool>,
 ) -> Result<(), String> {
     let win = app.get_webview_window("main").ok_or("main window fehlt")?;
     let gen = MORPH_GEN.fetch_add(1, Ordering::SeqCst) + 1;
@@ -162,6 +174,9 @@ pub async fn show_window(
                 }
                 pin_top_center(&win, width)?;
                 win.show().map_err(|e| e.to_string())?;
+            }
+            if focus.unwrap_or(false) {
+                win.set_focus().map_err(|e| e.to_string())?;
             }
             HIDE_GEN.fetch_add(1, Ordering::SeqCst);
             WINDOW_HIDDEN.store(false, Ordering::SeqCst);
@@ -282,30 +297,27 @@ pub fn pin_top_center(win: &tauri::WebviewWindow, width: f64) -> Result<(), Stri
         let position = move || unsafe {
             use objc2::{msg_send, sel, MainThreadMarker};
             use objc2_app_kit::{NSScreen, NSWindow};
-            use objc2_foundation::NSPoint;
+            use objc2_foundation::{ns_string, NSPoint};
             let Ok(pointer) = window.ns_window() else {
                 return;
             };
             let native = &*(pointer as *const NSWindow);
             let mtm = MainThreadMarker::new().expect("main thread");
-            let pointer = objc2_app_kit::NSEvent::mouseLocation();
-            let pointer_screen = if WINDOW_HIDDEN.load(Ordering::SeqCst) {
-                NSScreen::screens(mtm).iter().find(|screen| {
-                    let f = screen.frame();
-                    pointer.x >= f.origin.x
-                        && pointer.x < f.origin.x + f.size.width
-                        && pointer.y >= f.origin.y
-                        && pointer.y < f.origin.y + f.size.height
-                })
-            } else {
-                None
-            };
-            let Some(screen) = pointer_screen
-                .or_else(|| native.screen())
-                .or_else(|| NSScreen::mainScreen(mtm))
-            else {
+            let screens = NSScreen::screens(mtm);
+            if screens.is_empty() {
                 return;
-            };
+            }
+            // Pin to the active built-in display regardless of cursor or window location.
+            // A closed MacBook lid removes that display from NSScreen's active list.
+            let index = preferred_display_index(screens.iter().map(|screen| {
+                let description = screen.deviceDescription();
+                let Some(number) = description.objectForKey(ns_string!("NSScreenNumber")) else {
+                    return false;
+                };
+                let display: u32 = msg_send![&*number, unsignedIntValue];
+                CGDisplayIsBuiltin(display) != 0
+            }));
+            let screen = screens.objectAtIndex(index);
             let screen_frame = screen.frame();
             let frame = native.frame();
             // safeAreaInsets arrived in macOS 12; older systems have no notch.
@@ -446,7 +458,15 @@ fn top_center_origin(
 
 #[cfg(test)]
 mod display_tests {
-    use super::{notch_anchor_offset, top_center_origin};
+    use super::{notch_anchor_offset, preferred_display_index, top_center_origin};
+
+    #[test]
+    fn prefers_builtin_display_and_falls_back_to_menu_bar_display() {
+        assert_eq!(preferred_display_index([false, true].into_iter()), 1);
+        assert_eq!(preferred_display_index([true, false].into_iter()), 0);
+        assert_eq!(preferred_display_index([false, false].into_iter()), 0);
+        assert_eq!(preferred_display_index([true].into_iter()), 0);
+    }
 
     #[test]
     fn anchors_at_display_edge_and_respects_display_origins() {

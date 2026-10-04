@@ -43,6 +43,7 @@ const initial: Status = {
   groq: false,
 };
 const blank: KeyState = { value: "", state: "empty" };
+type UpdateStatus = { available: boolean };
 
 export default function Onboarding() {
   const [settingsMode, setSettingsMode] = useState(
@@ -69,6 +70,8 @@ export default function Onboarding() {
   const [micOpen, setMicOpen] = useState(false);
   const [shortcut, setShortcut] = useState("right-option");
   const [agentModel, setAgentModel] = useState("inception/mercury-2.5");
+  const [updateAvailable, setUpdateAvailable] = useState(false);
+  const [updateInstalling, setUpdateInstalling] = useState(false);
   const shortcutLabel = shortcutText(shortcut);
   const [recordingShortcut, setRecordingShortcut] = useState(false);
   const [openRevision, setOpenRevision] = useState(0);
@@ -81,6 +84,24 @@ export default function Onboarding() {
   });
   const [completing, setCompleting] = useState(false);
   const windowAnimation = useAnimationControls();
+  useEffect(() => {
+    if (!settingsMode) return;
+    let live = true;
+    let unlisten: (() => void) | undefined;
+    void listen<UpdateStatus>("update-status", ({ payload }) => {
+      if (live) setUpdateAvailable(payload.available);
+    }).then((stop) => {
+      if (live) unlisten = stop;
+      else stop();
+    });
+    void invoke<UpdateStatus>("get_update_status").then((status) => {
+      if (live) setUpdateAvailable(status.available);
+    });
+    return () => {
+      live = false;
+      unlisten?.();
+    };
+  }, [settingsMode]);
   useEffect(() => {
     windowAnimation.set(
       reducedMotion
@@ -731,9 +752,18 @@ export default function Onboarding() {
                 </span>
               </button>
             ))}
-            <button onClick={() => void invoke("open_updates")}>
+            <button
+              disabled={updateInstalling}
+              onClick={() => {
+                setUpdateInstalling(updateAvailable);
+                void invoke("update_action").catch((e) => {
+                  setUpdateInstalling(false);
+                  setError(String(e));
+                });
+              }}
+            >
               <ArrowRight size={16} />
-              <span>Updates<small>Check for a new version</small></span>
+              <span>Updates<small>{updateInstalling ? "Installing update…" : updateAvailable ? "One update available" : "Checks automatically"}</small></span>
             </button>
             <p>
               Made for your flow.
