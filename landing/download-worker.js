@@ -16,6 +16,11 @@ function trackInstallerRequest(ctx, websiteId, hostname) {
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+    if (url.pathname === '/downloads/cue-latest.dmg') {
+      if (!['GET', 'HEAD'].includes(request.method)) return new Response('Method not allowed', { status: 405, headers: { Allow: 'GET, HEAD' } });
+      if (request.method === 'GET' && validWebsiteId(env.UMAMI_WEBSITE_ID)) trackInstallerRequest(ctx, env.UMAMI_WEBSITE_ID, url.hostname);
+      return new Response(null, { status: 302, headers: { Location: 'https://github.com/Nic047/cue/releases/latest/download/cue-apple-silicon.dmg', 'Cache-Control': 'no-store' } });
+    }
     if (url.pathname !== download) return env.ASSETS.fetch(request);
     if (!['GET', 'HEAD'].includes(request.method)) return new Response('Method not allowed', { status: 405, headers: { Allow: 'GET, HEAD' } });
     try {
