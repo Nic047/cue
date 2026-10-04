@@ -5,7 +5,7 @@ const validWebsiteId = (value) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89
 function trackInstallerRequest(ctx, websiteId, hostname) {
   ctx.waitUntil(fetch('https://cloud.umami.is/api/send', {
     method: 'POST',
-    headers: { 'content-type': 'application/json', 'user-agent': 'Cue-Download-Worker/1.0' },
+    headers: { 'content-type': 'application/json', 'user-agent': 'cue-download-worker/1.0' },
     body: JSON.stringify({
       type: 'event',
       payload: { website: websiteId, hostname, url: '/downloads/installer', name: 'Installer request served' },
@@ -31,7 +31,7 @@ export default {
       if (range) headers.set('Content-Range', `bytes ${offset}-${offset + length - 1}/${object.size}`);
       return new Response(request.method === 'HEAD' ? null : object.body, { status: range ? 206 : 200, headers });
     } catch (error) {
-      console.error('Cue download unavailable', error);
+      console.error('cue download unavailable', error);
       return new Response('Download temporarily unavailable', { status: 503 });
     }
   },

@@ -1,6 +1,6 @@
 # Architecture
 
-Cue has three parts: a React interface, a native Tauri host, and a Node sidecar. Solari browser and sandbox sessions run in the cloud. The app does not give cloud agents general control of local applications.
+cue has three parts: a React interface, a native Tauri host, and a Node sidecar. Solari browser and sandbox sessions run in the cloud. The app does not give cloud agents general control of local applications.
 
 ## Request flow
 

@@ -1,26 +1,26 @@
-# Cue
+# cue
 
 **Say what you want done. Keep working.**
 
-Cue is an open-source macOS assistant that lets you hand off browser and sandbox tasks to AI agents while you continue working. It lives in the menu bar and, on supported MacBook displays, can sit around the notch.
+cue is an open-source macOS assistant that lets you hand off browser and sandbox tasks to AI agents while you continue working. It lives in the menu bar and, on supported MacBook displays, can sit around the notch.
 
-[Download Cue](https://trycue.lol/) · [Source code](https://github.com/Nic047/cue) · [Report a bug](https://github.com/Nic047/cue/issues)
+[Download cue](https://trycue.lol/) · [Source code](https://github.com/Nic047/cue) · [Report a bug](https://github.com/Nic047/cue/issues)
 
 ## Project status
 
-Cue is an early alpha for evaluation. It currently supports Apple Silicon Macs and requires your own Solari, Vercel AI Gateway, and Groq API keys. The downloadable build is not notarized by Apple, and a clean-machine installation has not yet been fully verified. Expect rough edges; do not rely on Cue for important or time-sensitive work.
+cue is an early alpha for evaluation. It currently supports Apple Silicon Macs and requires your own Solari, Vercel AI Gateway, and Groq API keys. The downloadable build is not notarized by Apple, and a clean-machine installation has not yet been fully verified. Expect rough edges; do not rely on cue for important or time-sensitive work.
 
 ## What it does
 
 - Start a task by voice or keyboard shortcut.
-- Run browser and sandbox work in parallel while Cue stays in the menu bar.
+- Run browser and sandbox work in parallel while cue stays in the menu bar.
 - Review the result, task details, and recent chats in a compact panel.
 
 Browser agents use separate cloud sessions, not your signed-in local browser. Their instructions prohibit purchases, account changes, and form submissions other than public searches. These are model instructions, not a technical guarantee: browser tools can interact with pages. See [Security boundaries](SECURITY.md#security-boundaries).
 
 ## Install
 
-Download the Apple Silicon build from [trycue.lol](https://trycue.lol/), open the DMG, and drag Cue to Applications. On first launch, onboarding guides you through Microphone and Accessibility permissions, microphone selection, your shortcut, and provider keys.
+Download the Apple Silicon build from [trycue.lol](https://trycue.lol/), open the DMG, and drag cue to Applications. On first launch, onboarding guides you through Microphone and Accessibility permissions, microphone selection, your shortcut, and provider keys.
 
 ## Develop
 
@@ -48,11 +48,15 @@ cd island-tauri
 bun run bundle:unsigned
 ```
 
-The app is created under `island-tauri/src-tauri/target/release/bundle/macos/`; the DMG is written to `landing/downloads/`. These Python packages are used only to lay out the installer and are not shipped with Cue. The app is ad hoc signed but not notarized, and standard Gatekeeper installation is not verified. Signing and notarizing the complete app—including its embedded Node runtime and sidecar—are still required for a smooth public release.
+The app is created under `island-tauri/src-tauri/target/release/bundle/macos/`; the DMG is written to `landing/downloads/`. These Python packages are used only to lay out the installer and are not shipped with cue. The app is ad hoc signed but not notarized, and standard Gatekeeper installation is not verified. Signing and notarizing the complete app—including its embedded Node runtime and sidecar—are still required for a smooth public release.
+
+## Updates
+
+The next app version adds **Check for updates…** to the menu bar and Settings. Release publishing uses the workflow described in [Releasing cue](docs/RELEASING.md); it needs the private updater signing key configured as a repository secret. Existing 0.1.6 installations need one manual upgrade.
 
 ## Providers and privacy
 
-Cue stores app credentials in the macOS Keychain. Voice audio is sent to Groq for transcription; the resulting prompt and task context are processed by the configured agent and model providers. A task may also send relevant page content to the tools it uses. Recent chats are stored locally in WebView storage; exported files stay in `~/Downloads/Cue` until you remove them. Terminal logs may contain task content and URLs. Sandbox preview links are public and expire ten minutes after completion. Review your providers’ policies and avoid sensitive data in this alpha.
+cue stores app credentials in the macOS Keychain. Voice audio is sent to Groq for transcription; the resulting prompt and task context are processed by the configured agent and model providers. A task may also send relevant page content to the tools it uses. Recent chats are stored locally in WebView storage; exported files stay in `~/Downloads/Cue` until you remove them. Terminal logs may contain task content and URLs. Sandbox preview links are public and expire ten minutes after completion. Review your providers’ policies and avoid sensitive data in this alpha.
 
 ## Repository layout
 
@@ -74,4 +78,4 @@ Please report suspected vulnerabilities privately. See [SECURITY.md](SECURITY.md
 
 ## License
 
-Cue is licensed under the [MIT License](LICENSE). Bundled Geist fonts use the [SIL Open Font License](island-tauri/public/OFL-Geist.txt); dependencies retain their respective licenses.
+cue is licensed under the [MIT License](LICENSE). Bundled Geist fonts use the [SIL Open Font License](island-tauri/public/OFL-Geist.txt); dependencies retain their respective licenses.

@@ -1,6 +1,6 @@
 # Security policy
 
-Cue is an early alpha. Please do not use it with sensitive data or credentials belonging to someone else.
+cue is an early alpha. Please do not use it with sensitive data or credentials belonging to someone else.
 
 ## Reporting a vulnerability
 
@@ -20,7 +20,7 @@ For ordinary bugs and feature requests, use [GitHub Issues](https://github.com/N
 
 Both Bun lockfiles returned no known advisories from `bun audit`. An OSV scan of 541 registry packages in `Cargo.lock` found:
 
-- [RUSTSEC-2024-0429](https://rustsec.org/advisories/RUSTSEC-2024-0429.html): GLib 0.18.5 iterator unsoundness. This Linux dependency is absent from Cue’s supported `aarch64-apple-darwin` dependency tree. Linux is not a supported target.
+- [RUSTSEC-2024-0429](https://rustsec.org/advisories/RUSTSEC-2024-0429.html): GLib 0.18.5 iterator unsoundness. This Linux dependency is absent from cue’s supported `aarch64-apple-darwin` dependency tree. Linux is not a supported target.
 - [RUSTSEC-2024-0370](https://rustsec.org/advisories/RUSTSEC-2024-0370.html): unmaintained `proc-macro-error`, also absent from that macOS tree.
 - Unmaintained `unic-*` crates ([0081](https://rustsec.org/advisories/RUSTSEC-2025-0081.html), [0075](https://rustsec.org/advisories/RUSTSEC-2025-0075.html), [0080](https://rustsec.org/advisories/RUSTSEC-2025-0080.html), [0100](https://rustsec.org/advisories/RUSTSEC-2025-0100.html), [0098](https://rustsec.org/advisories/RUSTSEC-2025-0098.html)), inherited through Tauri’s `urlpattern` dependency. These maintenance advisories remain unresolved and require an upstream migration.
 

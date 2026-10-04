@@ -1,6 +1,6 @@
-# Cue for macOS
+# cue for macOS
 
-This directory contains Cue's Tauri desktop application. For project overview, setup, build instructions, and current limitations, see the [repository README](../README.md).
+This directory contains cue's Tauri desktop application. For project overview, setup, build instructions, and current limitations, see the [repository README](../README.md).
 
 ## Run the app in development
 

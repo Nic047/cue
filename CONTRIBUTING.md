@@ -1,10 +1,10 @@
-# Contributing to Cue
+# Contributing to cue
 
 Bug reports, documentation fixes, and focused pull requests are welcome. For larger changes, open an issue first so the scope can be discussed before implementation.
 
 ## Development setup
 
-Cue is a macOS app and currently targets Apple Silicon. Follow the setup in the [README](README.md). Do not commit API keys, credentials, user data, or generated app bundles.
+cue is a macOS app and currently targets Apple Silicon. Follow the setup in the [README](README.md). Do not commit API keys, credentials, user data, or generated app bundles.
 
 ## Before opening a pull request
 
