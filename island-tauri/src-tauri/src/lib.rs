@@ -6,6 +6,7 @@ mod media_control;
 mod native_audio;
 mod onboarding;
 mod orchestrator_bridge;
+mod updates;
 mod window_layout;
 use orchestrator_bridge::OrchestratorState;
 
@@ -42,6 +43,16 @@ fn build_tray_menu(app: &tauri::AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
     let menu = Menu::new(app)?;
     let recent = MenuItem::with_id(app, "recent-chats", "Recent Chats…", true, None::<&str>)?;
     menu.append(&recent)?;
+    let update = MenuItem::with_id(app, "updates", "Check for updates…", true, None::<&str>)?;
+    menu.append(&update)?;
+    let handle = app.clone();
+    tauri::async_runtime::spawn(async move {
+        if let Ok(info) = updates::check_update(handle).await {
+            if let Some(version) = info.version {
+                let _ = update.set_text(format!("Update to {version}…"));
+            }
+        }
+    });
     menu.append(&MenuItem::with_id(
         app,
         "settings",
@@ -50,8 +61,8 @@ fn build_tray_menu(app: &tauri::AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
         None::<&str>,
     )?)?;
     menu.append(&PredefinedMenuItem::separator(app)?)?;
-    let toggle = MenuItem::with_id(app, "toggle", "Toggle Cue", true, None::<&str>)?;
-    let quit = MenuItem::with_id(app, "quit", "Quit Cue", true, None::<&str>)?;
+    let toggle = MenuItem::with_id(app, "toggle", "Toggle cue", true, None::<&str>)?;
+    let quit = MenuItem::with_id(app, "quit", "Quit cue", true, None::<&str>)?;
     menu.append(&MenuItem::with_id(
         app,
         "show-onboarding",
@@ -77,8 +88,12 @@ fn build_tray_menu(app: &tauri::AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_nspanel::init())
         .invoke_handler(tauri::generate_handler![
+            updates::check_update,
+            updates::install_update,
+            updates::open_updates,
             onboarding::onboarding_status,
             onboarding::dismiss_setup,
             onboarding::restart_for_permissions,
@@ -101,6 +116,7 @@ pub fn run() {
             orchestrator_bridge::open_export,
             orchestrator_bridge::kill_task,
             window_layout::get_notch_layout,
+            window_layout::set_panel_dismiss,
             window_layout::resize_window,
             window_layout::morph_window,
             window_layout::hide_window,
@@ -148,6 +164,7 @@ pub fn run() {
 
             // Install the global shortcut listener.
             global_shortcut::install(app.handle().clone());
+            window_layout::watch_foreground(app.handle().clone());
 
             let Some(window) = app.get_webview_window("main") else {
                 return Ok(());
@@ -212,7 +229,7 @@ pub fn run() {
             tauri::tray::TrayIconBuilder::with_id("main")
                 .icon(icon)
                 .icon_as_template(true)
-                .tooltip("Cue")
+                .tooltip("cue")
                 .menu(&menu)
                 .on_menu_event(|app, event| {
                     let id = event.id.as_ref();
@@ -225,6 +242,12 @@ pub fn run() {
                     }
                     if id == "recent-chats" {
                         let _ = app.emit("recent-chats-open", ());
+                        return;
+                    }
+                    if id == "updates" {
+                        if let Err(error) = updates::open(app) {
+                            eprintln!("[cue] Update window: {error}");
+                        }
                         return;
                     }
                     if id == "settings" {

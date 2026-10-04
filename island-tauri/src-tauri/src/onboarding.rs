@@ -396,6 +396,7 @@ pub fn open(app: &AppHandle, keys_only: bool) -> Result<(), String> {
 }
 
 fn open_window(app: &AppHandle, keys_only: bool, settings: bool) -> Result<(), String> {
+    let _ = app.emit_to("main", "dismiss-panels", ());
     let label = if settings { "settings" } else { "onboarding" };
     let width = if settings { 780. } else { 700. };
     if let Some(win) = app.get_webview_window(label) {
@@ -423,7 +424,7 @@ fn open_window(app: &AppHandle, keys_only: bool, settings: bool) -> Result<(), S
         "index.html?onboarding"
     };
     let win = WebviewWindowBuilder::new(app, label, WebviewUrl::App(url.into()))
-        .title("Cue")
+        .title("cue")
         .inner_size(width, 740.)
         .resizable(false)
         .center()
@@ -467,7 +468,7 @@ pub fn reopen_setup(app: &AppHandle) {
             }
         }
     }
-    // Launching Cue again should restore setup, including a previously dismissed window.
+    // Launching cue again should restore setup, including a previously dismissed window.
     if let Err(error) = open(app, false) {
         eprintln!("[cue] Could not reopen onboarding: {error}");
     }
@@ -493,7 +494,7 @@ pub fn restart_for_permissions(app: AppHandle) -> Result<(), String> {
         .unwrap()
         .is_some()
     {
-        return Err("Finish or cancel your running task before restarting Cue.".into());
+        return Err("Finish or cancel your running task before restarting cue.".into());
     }
     // Tauri starts the replacement before exiting; release our instance lock first.
     let lock = app.state::<std::fs::File>();

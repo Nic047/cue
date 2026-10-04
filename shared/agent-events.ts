@@ -30,6 +30,7 @@ export type AgentEvent =
     }
   | { type: "question"; text: string; options: string[] }
   | { type: "answer"; text: string; detail: string; chatTitle?: string }
+  | { type: "no_task"; message: string }
   | { type: "agent_error"; message: string };
 
 /** Reject unknown/malformed events before they reach UI state. */
@@ -96,6 +97,7 @@ export function parseAgentEvent(line: string): AgentEvent | null {
     case "answer":
       valid = string("text") && string("detail") && optionalString("chatTitle");
       break;
+    case "no_task":
     case "agent_error":
       valid = string("message");
       break;

@@ -50,7 +50,7 @@ export function PermissionsStep({
               !status.hotkeyReady && (
                 <small>
                   Accessibility is allowed. Connecting the shortcut… If this
-                  stays here, quit and reopen Cue.
+                  stays here, quit and reopen cue.
                 </small>
               )}
           </div>
@@ -72,7 +72,7 @@ export function PermissionsStep({
       {!status.hotkeyReady && (
         <div className="ob-permission">
           <div>
-            <p>Already enabled Accessibility? macOS may need Cue to restart.</p>
+            <p>Already enabled Accessibility? macOS may need cue to restart.</p>
           </div>
           <button
             className="ob-secondary"
@@ -83,14 +83,14 @@ export function PermissionsStep({
               );
             }}
           >
-            Restart Cue
+            Restart cue
           </button>
         </div>
       )}
       <p className="ob-footnote">
-        If Cue is already enabled but still shows as blocked, remove the old Cue
-        entry with “−”, add Cue from Applications again, and enable it. Reopen
-        Cue if macOS asks you to quit.
+        If cue is already enabled but still shows as blocked, remove the old cue
+        entry with “−”, add cue from Applications again, and enable it. Reopen
+        cue if macOS asks you to quit.
       </p>
     </>
   );

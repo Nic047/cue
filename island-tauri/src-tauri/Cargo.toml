@@ -1,8 +1,8 @@
 [package]
 name = "cue"
-version = "0.1.6"
-description = "Cue macOS AI assistant"
-authors = ["Cue contributors"]
+version = "0.1.7"
+description = "cue macOS AI assistant"
+authors = ["cue contributors"]
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -33,6 +33,7 @@ security-framework = "3"
 reqwest = { version = "0.12", default-features = false, features = ["json", "multipart", "rustls-tls"] }
 objc2-foundation = "0.3"
 block2 = "0.6"
+tauri-plugin-updater = "2"
 
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration

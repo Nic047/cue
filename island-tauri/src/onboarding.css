@@ -740,8 +740,8 @@ html:has(.onboarding) #root {
   align-items: center;
   justify-content: space-between;
   gap: 14px;
-  min-height: 48px;
-  padding: 10px 14px;
+  min-height: 44px;
+  padding: 10px 13px;
   border: 1px solid #303030;
   border-radius: 10px;
   background: #171717;
@@ -759,7 +759,7 @@ html:has(.onboarding) #root {
   position: relative;
   min-width: 0;
   width: 100%;
-  max-width: 400px;
+  max-width: none;
 }
 .ob-model-trigger {
   width: 100%;

@@ -343,6 +343,9 @@ fn finish_capture(recording: ActiveRecording) -> Result<FinishedRecording, Strin
 
 #[tauri::command]
 pub fn start_audio_recording(state: State<'_, NativeAudio>) -> Result<String, String> {
+    if crate::updates::is_installing() {
+        return Err("Wait for the update to finish.".into());
+    }
     let (reply, response) = mpsc::channel();
     state
         .commands

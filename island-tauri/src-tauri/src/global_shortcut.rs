@@ -1,6 +1,6 @@
 //! Native shortcut recording and global tap/hold handling.
 //! CGEventTap supports standalone modifiers and arbitrary key chords.
-//! Escape is consumed only while Cue or an active task needs it.
+//! Escape is consumed only while cue or an active task needs it.
 
 use objc2::{class, msg_send, runtime::AnyObject};
 use objc2_foundation::NSString;
@@ -44,6 +44,7 @@ extern "C" {
     fn CGEventTapEnable(tap: *mut c_void, enable: bool);
     fn CGEventTapIsEnabled(tap: *mut c_void) -> bool;
     fn CGEventGetFlags(event: *mut c_void) -> u64;
+    fn CGEventGetLocation(event: *mut c_void) -> objc2_foundation::NSPoint;
     fn CGEventCreateCopy(event: *mut c_void) -> *mut c_void;
     fn CGEventGetIntegerValueField(event: *mut c_void, field: u64) -> i64;
 }
@@ -122,7 +123,7 @@ impl Shortcut {
                 }
             };
         if !valid {
-            return Err("Choose a key or modifier. Escape is reserved for closing Cue.".into());
+            return Err("Choose a key or modifier. Escape is reserved for closing cue.".into());
         }
         Ok(shortcut)
     }
@@ -289,6 +290,13 @@ unsafe extern "C" fn on_flags_changed(
         }
         return std::ptr::null_mut();
     }
+    if etype == 1 || etype == 3 {
+        if let Some(app) = APP_HANDLE.get() {
+            let point = CGEventGetLocation(event);
+            crate::window_layout::dismiss_if_outside(app, point.x, point.y);
+        }
+        return event; // Never consume another app's mouse click.
+    }
     let flags = CGEventGetFlags(event);
     let keycode = CGEventGetIntegerValueField(event, K_CG_KEYBOARD_EVENT_KEYCODE) as u16;
     if CAPTURING.load(Ordering::SeqCst) {
@@ -401,14 +409,16 @@ pub fn install(app: AppHandle) {
             K_CG_EVENT_TAP_OPTION_DEFAULT,
             (1u64 << K_CG_EVENT_FLAGS_CHANGED)
                 | (1u64 << K_CG_EVENT_KEY_DOWN)
-                | (1u64 << K_CG_EVENT_KEY_UP),
+                | (1u64 << K_CG_EVENT_KEY_UP)
+                | (1u64 << 1)
+                | (1u64 << 3),
             on_flags_changed,
             std::ptr::null_mut(),
         );
         if tap.is_null() {
             INSTALLING.store(false, Ordering::SeqCst);
             if !PERMISSION_FAILURE_REPORTED.swap(true, Ordering::SeqCst) {
-                eprintln!("[cue] Shortcut access denied. Enable Cue in System Settings > Privacy & Security > Accessibility.");
+                eprintln!("[cue] Shortcut access denied. Enable cue in System Settings > Privacy & Security > Accessibility.");
             }
             return;
         }

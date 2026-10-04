@@ -15,7 +15,6 @@ import {
   openDetail,
   closeDetail,
   recentChats,
-  openRecentChat,
   deleteRecentChat,
   type RecentChat,
 } from "./lib/agent-state";
@@ -32,10 +31,10 @@ const MAX_ERROR_PILL_W = 480;
 
 const ICON_SIZE = 20;
 export const PANEL_W = 520;
-export const PILL_HEIGHT = 400; // DIE fixe Hoehe aller Status-Zustaende
+export const PILL_HEIGHT = 400; // Question height fallback
 // Detail-Overlay: fallback size when monitor dimensions are unavailable.
-export const OVERLAY_W = 1100;
-export const OVERLAY_H = 540;
+export const OVERLAY_W = 760;
+export const OVERLAY_H = 440;
 // Collapse completed results unless the detail overlay is open.
 const DONE_COLLAPSE_MS = 10_000;
 // Brief empty flash when a task starts.
@@ -88,8 +87,8 @@ function PillRow({
       <div
         style={{
           position: "absolute",
-          left: notchWidth ? notchWidth + 48 + 14 : 40,
-          right: notchWidth ? 14 : 0,
+          left: notchWidth ? notchWidth + 48 + 14 : 86,
+          right: notchWidth ? 14 : 42,
           height: "100%",
           display: "flex",
           alignItems: "center",
@@ -108,7 +107,7 @@ function PillRow({
 export default function App() {
   const [notch, setNotch] = useState({ width: 0, height: 0 });
   const notched = notch.width > 0;
-  const PILL_W = notched ? notch.width + 48 + 170 : 230;
+  const PILL_W = notched ? notch.width + 48 + 170 : 250;
   const PILL_ICON_W = notched ? PILL_W : 112;
   const PILL_H = notched ? Math.max(42, notch.height + 8) : 42;
   const [questionContentHeight, setQuestionContentHeight] = useState(340);
@@ -150,7 +149,7 @@ export default function App() {
     error,
     answer,
     detail,
-    detailOpen,
+    detailOpen: liveDetailOpen,
     question,
     planMs,
     totalMs,
@@ -180,6 +179,10 @@ export default function App() {
       disposed = true;
     };
   }, [question, notch.height]);
+  const [archivedChat, setArchivedChat] = useState<RecentChat | null>(null);
+  const detailOpen = liveDetailOpen || archivedChat !== null;
+  const resultDetail = archivedChat?.detail ?? detail;
+  const resultAnswer = archivedChat?.answer ?? answer;
   const phaseRef = useRef(phase);
   useEffect(() => {
     phaseRef.current = phase;
@@ -194,32 +197,21 @@ export default function App() {
   useEffect(() => {
     detailOpenRef.current = detailOpen;
   }, [detailOpen]);
-  function restorePillSize() {
-    if (phaseRef.current === "done") {
-      // Return to the compact results-ready pill.
-      void presentWindow(pillDimensions.current, true);
-    } else {
-      void invoke("hide_window");
-    }
-  }
-
   function closeOverlay() {
+    setArchivedChat(null);
+    setPanelDismissed(true);
     closeDetail();
-    if (returnToRecentChatsRef.current) {
-      returnToRecentChatsRef.current = false;
-      setRecentChatItems(recentChats());
-      setRecentChatsOpen(true);
-      return;
-    }
-    restorePillSize();
+    if (phaseRef.current === "done") reset();
+    else void invoke("hide_window");
   }
 
   // Only questions use the expanded dialog here.
   const [view, setView] = useState<"pill" | "panel" | null>(null);
   const [recentChatsOpen, setRecentChatsOpen] = useState(false);
+  const [questionDismissed, setQuestionDismissed] = useState(false);
+  const [panelDismissed, setPanelDismissed] = useState(false);
   const recentChatsOpenRef = useRef(recentChatsOpen);
   recentChatsOpenRef.current = recentChatsOpen;
-  const returnToRecentChatsRef = useRef(false);
   const recentMenuWasOpenRef = useRef(false);
   const [recentChatItems, setRecentChatItems] = useState<RecentChat[]>([]);
   const [resultsRevealed, setResultsRevealed] = useState(false);
@@ -229,8 +221,8 @@ export default function App() {
   const statusPillWidth =
     phase === "error" ? Math.max(PILL_W, errorPillWidth) : PILL_W;
   function dismissRecentChats() {
+    setPanelDismissed(true);
     setRecentChatsOpen(false);
-    returnToRecentChatsRef.current = false;
     detailOpenRef.current = false;
     closeDetail();
     void invoke("hide_window");
@@ -240,7 +232,10 @@ export default function App() {
     let disposed = false;
     let unlisten: (() => void) | undefined;
     void listen("recent-chats-open", () => {
+      closeDetail();
+      setArchivedChat(null);
       setRecentChatItems(recentChats());
+      setPanelDismissed(false);
       setRecentChatsOpen(true);
     }).then((stop) => {
       if (disposed) stop();
@@ -251,6 +246,56 @@ export default function App() {
       unlisten?.();
     };
   }, []);
+
+  function openLatestResult() {
+    setPanelDismissed(false);
+    setRecentChatsOpen(false);
+    const latest = recentChats()[0];
+    if (latest) { setArchivedChat(latest); return; }
+    setRecentChatItems([]);
+    setRecentChatsOpen(true);
+  }
+  function dismissPanels() {
+    setArchivedChat(null);
+    setPanelDismissed(true);
+    setRecentChatsOpen(false);
+    closeDetail();
+    if (questionRef.current) setQuestionDismissed(true);
+    void invoke("hide_window");
+  }
+  useEffect(() => {
+    if (["arming", "listening"].includes(phase)) setArchivedChat(null);
+    if (["arming", "listening", "transcribing", "done"].includes(phase)) {
+      setPanelDismissed(false);
+      setRecentChatsOpen(false);
+    }
+  }, [phase]);
+  useEffect(() => {
+    if (question) {
+      setQuestionDismissed(false);
+      setPanelDismissed(false);
+      setRecentChatsOpen(false);
+    }
+  }, [question]);
+  useEffect(() => {
+    if (detailOpen) {
+      setPanelDismissed(false);
+      setRecentChatsOpen(false);
+    }
+  }, [detailOpen]);
+  useEffect(() => {
+    if (IS_DEMO) return;
+    let disposed = false;
+    let unlisten: (() => void) | undefined;
+    void listen("dismiss-panels", () => dismissPanels()).then((stop) => {
+      if (disposed) stop(); else unlisten = stop;
+    });
+    return () => { disposed = true; unlisten?.(); };
+  }, []);
+  useEffect(() => {
+    if (!IS_DEMO) void invoke("set_panel_dismiss", { enabled: recentChatsOpen || detailOpen || Boolean(question && !questionDismissed) });
+    return () => { if (!IS_DEMO) void invoke("set_panel_dismiss", { enabled: false }); };
+  }, [recentChatsOpen, detailOpen, question, questionDismissed]);
 
   useEffect(() => {
     if (!recentChatsOpen) return;
@@ -360,10 +405,16 @@ export default function App() {
     pillDimensions,
     closeOverlay,
     dismissRecentChats,
+    openLatestResult,
+    revealQuestion: () => { setQuestionDismissed(false); setPanelDismissed(false); },
   });
 
   // Keep background work hidden except during explicit peeks, questions, and completion. Initial presentation snaps to size.
   useEffect(() => {
+    if (panelDismissed && !recentChatsOpen && !detailOpen) {
+      void invoke("hide_window");
+      return;
+    }
     if (recentChatsOpen) {
       recentMenuWasOpenRef.current = true;
       void presentWindow({ width: RECENT_CHATS_W, height: RECENT_CHATS_H });
@@ -420,6 +471,7 @@ export default function App() {
             ({ width, height } = resultsPanelSize(
               m.size.width / scale,
               m.size.height / scale,
+              `${archivedChat?.transcript ?? transcript}\n${resultDetail || resultAnswer || ""}`,
             ));
           }
         } catch {
@@ -472,7 +524,7 @@ export default function App() {
       void invoke("hide_window");
       return;
     }
-    if (question) {
+    if (question && !questionDismissed) {
       void presentWindow({ width: questionWidth, height: PILL_HEIGHT }, true);
       return;
     }
@@ -525,6 +577,8 @@ export default function App() {
     notch.height,
     PILL_HEIGHT,
     questionWidth,
+    questionDismissed,
+    panelDismissed,
   ]);
 
   // Auto-collapse completed results unless details or the demo harness are open.
@@ -535,7 +589,7 @@ export default function App() {
     return () => window.clearTimeout(t);
   }, [phase, answer, detailOpen, recentChatsOpen, onboardingActive]);
 
-  const showQuestion = question !== null;
+  const showQuestion = question !== null && !questionDismissed && !detailOpen;
   // Only questions use this panel.
   const isBig = showQuestion;
   // Count unfinished tasks for the running indicator.
@@ -584,8 +638,10 @@ export default function App() {
         notchHeight={notch.height}
         onClose={dismissRecentChats}
         onOpen={(id) => {
-          if (!openRecentChat(id)) return;
-          returnToRecentChatsRef.current = true;
+          const chat = recentChats().find((item) => item.id === id);
+          if (!chat) return;
+          setArchivedChat(chat);
+          setPanelDismissed(false);
           setRecentChatsOpen(false);
         }}
         onDelete={(id) => {
@@ -595,7 +651,7 @@ export default function App() {
       />
     );
   }
-  if (view === null && !question) return null;
+  if ((view === null && !question && !detailOpen) || panelDismissed && !recentChatsOpen && !detailOpen) return null;
 
   return (
     <main
@@ -614,7 +670,7 @@ export default function App() {
         overflow: "hidden",
         background: notched ? "black" : "transparent",
         borderRadius: notched
-          ? `0 0 ${detailOpen ? 24 : 12}px ${detailOpen ? 24 : 12}px`
+          ? `0 0 ${detailOpen ? 16 : 12}px ${detailOpen ? 16 : 12}px`
           : undefined,
         transition:
           notched &&
@@ -638,7 +694,7 @@ export default function App() {
           // Status follows the SVG; questions use a complete card behind their controls.
           overflow: "hidden",
           ...(isBig
-            ? { background: "#0b0b0b", borderRadius: "0 0 24px 24px" }
+            ? { background: "#0b0b0b", borderRadius: "0 0 16px 16px" }
             : {}),
         }}
       >
@@ -692,9 +748,7 @@ export default function App() {
                         <span
                           key="listening"
                           style={{
-                            transform: notched
-                              ? "translateX(18px)"
-                              : "translateX(3px)",
+                            transform: "none",
                           }}
                         >
                           <Shimmer>Listening...</Shimmer>
@@ -702,9 +756,7 @@ export default function App() {
                         <span
                           key="transcribing"
                           style={{
-                            transform: notched
-                              ? "translateX(18px)"
-                              : "translateX(3px)",
+                            transform: "none",
                           }}
                         >
                           <Shimmer>Transcribing...</Shimmer>
@@ -712,9 +764,7 @@ export default function App() {
                         <span
                           key="running"
                           style={{
-                            transform: notched
-                              ? "translateX(8px)"
-                              : "translateX(-7px)",
+                            transform: "none",
                           }}
                         >
                           <Shimmer>Running...</Shimmer>
@@ -725,18 +775,14 @@ export default function App() {
                           style={{
                             display: "inline-flex",
                             alignItems: "center",
-                            gap: 2,
-                            margin: notched ? 0 : "0px 0px 0px 10px",
-                            transform: notched
-                              ? "translateX(8px)"
-                              : "translateX(5px)",
+                            gap: 6,
                           }}
                         >
                           <Shimmer>{agentsRunningText}</Shimmer>
                           <span
                             style={{
                               color: "#777",
-                              margin: "0px 5px 0px 5px",
+                              margin: 0,
                             }}
                           >
                             ·
@@ -846,13 +892,13 @@ export default function App() {
       </motion.div>
       {/* Wide results scoop; clicking outside closes it. */}
       <AnimatePresence>
-        {detailOpen && (detail || answer) && (
+        {detailOpen && (resultDetail || resultAnswer) && (
           <ResultsPanel
-            detail={detail}
-            answer={answer}
-            transcript={transcript}
-            totalMs={totalMs}
-            tasks={tasks}
+            detail={resultDetail}
+            answer={resultAnswer}
+            transcript={archivedChat?.transcript ?? transcript}
+            totalMs={archivedChat ? archivedChat.totalMs : totalMs}
+            tasks={archivedChat ? [] : tasks}
             notched={notched}
             notchHeight={notch.height}
             resultsRevealed={resultsRevealed}

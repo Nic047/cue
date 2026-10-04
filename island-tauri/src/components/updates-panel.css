@@ -1,0 +1,12 @@
+.updates-panel { box-sizing: border-box; height: 100%; padding: 24px 32px; overflow-y: auto; background: #101010; color: #eee; font-family: var(--font-sans); text-align: center; }
+.updates-brand { display: block; text-align: left; font-weight: 500; font-size: 18px; letter-spacing: -.04em; }
+.updates-symbol { margin: 20px auto 16px; display: grid; place-items: center; width: 46px; height: 46px; background: #202020; border-radius: 12px; color: #aaa; }
+.updates-panel h1 { font-size: 20px; font-weight: 500; letter-spacing: -.03em; margin: 0 0 10px; }
+.updates-description { font-size: 12px; line-height: 1.5; color: #888; margin: 0 0 20px; }
+.updates-panel button { display: inline-flex; align-items: center; gap: 8px; border: 0; border-radius: 8px; background: #eee; color: #111; padding: 10px 16px; font-size: 12px; font-family: inherit; cursor: pointer; }
+.updates-panel button:disabled { opacity: .55; cursor: default; }
+.updates-notes { max-height: 90px; overflow: auto; text-align: left; padding: 12px; border: 1px solid #292929; border-radius: 8px; margin-bottom: 16px; }
+.updates-error { color: #d89b9b; font-size: 12px; line-height: 1.5; }
+.updates-spinning { animation: updates-spin 1s linear infinite; }
+@keyframes updates-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .updates-spinning { animation: none; } }

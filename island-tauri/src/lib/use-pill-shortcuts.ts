@@ -6,19 +6,14 @@ import {
   wireShortcuts,
   startListening,
   stopListeningAndRun,
-  openDetail,
   answerQuestion,
   cancel,
-  reset,
   hidePill,
   type Phase,
   type AgentQuestion,
 } from "./agent-state";
 
 const PEEK_MAX_MS = 5000;
-const log = (line: string) => {
-  void invoke("log_line", { line });
-};
 const presentWindow = (size: { width: number; height: number }) =>
   invoke("show_window", { ...size, animate: false });
 
@@ -30,6 +25,8 @@ export function usePillShortcuts({
   pillDimensions,
   closeOverlay,
   dismissRecentChats,
+  openLatestResult,
+  revealQuestion,
 }: {
   phaseRef: RefObject<Phase>;
   questionRef: RefObject<AgentQuestion | null>;
@@ -38,19 +35,19 @@ export function usePillShortcuts({
   pillDimensions: RefObject<{ width: number; height: number }>;
   closeOverlay: () => void;
   dismissRecentChats: () => void;
+  openLatestResult: () => void;
+  revealQuestion: () => void;
 }) {
-  const callbacks = useRef({ closeOverlay, dismissRecentChats });
-  callbacks.current = { closeOverlay, dismissRecentChats };
+  const callbacks = useRef({ closeOverlay, dismissRecentChats, openLatestResult, revealQuestion });
+  callbacks.current = { closeOverlay, dismissRecentChats, openLatestResult, revealQuestion };
 
   // Escape hides, double Escape cancels; open details close first. Holding the shortcut reveals background progress.
   const lastEsc = useRef(0);
   const holdTimerRef = useRef<number | null>(null);
   const peekShownRef = useRef(false);
   const peekHideTimerRef = useRef<number | null>(null);
-  // Use the same interval for the timer and double-tap comparison to avoid inconsistent resets.
-  const DONE_DOUBLE_TAP_MS = 800;
-  const lastDoneTap = useRef(0);
-  const doneTapTimer = useRef<number | null>(null);
+  const DOUBLE_TAP_MS = 450;
+  const lastTap = useRef(0);
 
   function clearHoldTimer() {
     if (holdTimerRef.current != null) {
@@ -96,42 +93,35 @@ export function usePillShortcuts({
   useEffect(() => {
     wireShortcuts({
       onToggle: () => {
+        const now = Date.now();
+        const p = phaseRef.current;
+        const doubleTap = now - lastTap.current < DOUBLE_TAP_MS;
+        lastTap.current = now;
+        if (doubleTap) {
+          lastTap.current = 0;
+          clearHoldTimer();
+          hidePeek();
+          if (p !== "working" && p !== "transcribing") cancel();
+          callbacks.current.openLatestResult();
+          return;
+        }
+        if (recentChatsOpenRef.current) callbacks.current.dismissRecentChats();
         if (detailOpenRef.current) {
           callbacks.current.closeOverlay();
           return;
         }
-        if (questionRef.current) return;
-        const p = phaseRef.current;
-        if (p === "idle" || p === "error") startListening();
-        else if (p === "arming" || p === "listening") stopListeningAndRun();
-        else if (p === "working") {
-          // Arm the hold timer without showing the pill immediately.
-          if (holdTimerRef.current == null) {
-            holdTimerRef.current = window.setTimeout(showPeek, HOLD_TO_PEEK_MS);
-          }
-        } else if (p === "done") {
-          // Wait briefly for a second tap to open results; otherwise reset the compact pill.
-          const now = Date.now();
-          if (now - lastDoneTap.current < DONE_DOUBLE_TAP_MS) {
-            if (doneTapTimer.current != null) {
-              window.clearTimeout(doneTapTimer.current);
-              doneTapTimer.current = null;
-            }
-            lastDoneTap.current = 0;
-            log("[island] Double tap: opening results.");
-            openDetail();
-          } else {
-            lastDoneTap.current = now;
-            doneTapTimer.current = window.setTimeout(() => {
-              doneTapTimer.current = null;
-              if (phaseRef.current === "done") reset();
-            }, DONE_DOUBLE_TAP_MS);
-          }
+        if (questionRef.current) {
+          callbacks.current.revealQuestion();
+          return;
         }
-        // transcribing: ignorieren
+        if (p === "idle" || p === "error" || p === "done") startListening();
+        else if (p === "arming" || p === "listening") stopListeningAndRun();
+        else if (p === "working" && holdTimerRef.current == null) {
+          holdTimerRef.current = window.setTimeout(showPeek, HOLD_TO_PEEK_MS);
+        }
       },
       onRelease: () => {
-        // Hold abgebrochen bzw. beendet: Timer weg, ggf. Peek verstecken.
+        // Release cancels the hold timer and hides a peek.
         clearHoldTimer();
         hidePeek();
       },
@@ -154,21 +144,20 @@ export function usePillShortcuts({
           return;
         }
         if (isDouble) {
-          cancel(); // zu + Task killen
+          cancel(); // Stop the task.
           return;
         }
         // A single Escape closes either pill size.
         const p = phaseRef.current;
         if (p === "working")
           hidePill(); // Work continues; completion will show the pill again.
-        else cancel(); // listening/transcribing/done: verwerfen + zu
+        else cancel(); // Discard recording or dismiss completion.
       },
     });
     return () => {
       clearHoldTimer();
       clearPeekHideTimer();
-      if (doneTapTimer.current != null)
-        window.clearTimeout(doneTapTimer.current);
+
     };
   }, []);
 }

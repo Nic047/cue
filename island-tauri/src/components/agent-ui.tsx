@@ -14,7 +14,7 @@ export function PillContent({ phase }: { phase: string }) {
   return <span className="">{label}</span>;
 }
 
-/** Question choices and free text. An empty answer delegates the choice to Cue. */
+/** Question choices and free text. An empty answer delegates the choice to cue. */
 export function QuestionPanel({
   question,
   onAnswer,
@@ -79,7 +79,7 @@ export function QuestionPanel({
       </form>
       <footer className="agent-question-footer">
         <button type="button" className="agent-question-skip" onClick={() => onAnswer("")}>
-          Let Cue decide <kbd>esc</kbd>
+          Let cue decide <kbd>esc</kbd>
         </button>
         <span>Enter to send</span>
       </footer>

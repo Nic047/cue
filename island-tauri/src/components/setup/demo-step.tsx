@@ -27,7 +27,7 @@ export function DemoStep({
     <>
       <p className="ob-eyebrow">LET'S DO SOMETHING REAL</p>
       <h1 id="ob-title">Your first handoff.</h1>
-      <p className="ob-lead">Try Cue with a real task.</p>
+      <p className="ob-lead">Try cue with a real task.</p>
       <div
         className={`ob-lesson ${lesson === 1 ? "active" : tapped ? "complete" : ""}`}
       >

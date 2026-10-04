@@ -153,23 +153,14 @@ export const IS_DEMO =
   typeof window.location !== "undefined" &&
   new URLSearchParams(window.location.search).has("demo");
 
-/** Wide reading panel, capped to the available monitor size. */
-export function resultsPanelSize(
-  screenW: number,
-  screenH: number,
-): { width: number; height: number } {
-  const height = Math.min(
-    screenH - 48,
-    Math.max(320, Math.round(screenH * 0.45)),
-  );
-  const width = Math.min(
-    screenW - 48,
-    Math.max(
-      520,
-      Math.min(Math.round(height * 2.45), Math.round(screenW * 0.78)),
-    ),
-  );
-  return { width, height };
+/** Compact reading panel with an upper bound on large external displays. */
+export function resultsPanelSize(screenW: number, screenH: number, content?: string): { width: number; height: number } {
+  const short = content !== undefined && content.length < 360;
+  const lines = content?.split("\n").reduce((total, line) => total + Math.max(1, Math.ceil(line.length / (short ? 56 : 90))), 0);
+  return {
+    width: Math.max(280, Math.min(short ? 520 : 760, screenW - 48)),
+    height: Math.max(220, Math.min(lines === undefined ? 440 : 150 + lines * 24, 440, Math.round(screenH * 0.48), screenH - 48)),
+  };
 }
 
 // Global store shared by UI hooks.
@@ -407,7 +398,7 @@ function ensureWired() {
         ev.taskId ? t.id === ev.taskId : t.title === ev.title,
       );
       const step: AgentStep = {
-        label: `${ev.ok ? "OK" : "FEHLER"} — ${ev.title ?? ""} (${ev.steps ?? 0} steps)`,
+        label: `${ev.ok ? "OK" : "ERROR"} — ${ev.title ?? ""} (${ev.steps ?? 0} steps)`,
         ok: Boolean(ev.ok),
       };
       set({
@@ -452,10 +443,13 @@ function ensureWired() {
       } catch {
         /* ignore */
       }
+    } else if (ev.type === "no_task") {
+      reset();
+      if (onboardingWatching) set({ phase: "error", error: ev.message });
     } else if (ev.type === "agent_error") {
       set({
         phase: "error",
-        error: String(ev.message ?? "Cue agent exited unexpectedly."),
+        error: String(ev.message ?? "cue agent exited unexpectedly."),
       });
     }
   });

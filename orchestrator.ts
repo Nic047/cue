@@ -172,7 +172,7 @@ async function main() {
     const msg =
       plan.note ||
       "I couldn't identify a concrete task. Tell me what you'd like me to do.";
-    emitEvent({ type: "answer", text: msg, detail: "" });
+    emitEvent({ type: "no_task", message: msg });
     console.error("◈ No executable task:", msg);
     return;
   }

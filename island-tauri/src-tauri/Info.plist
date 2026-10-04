@@ -3,8 +3,8 @@
 <plist version="1.0">
 <dict>
   <key>NSMicrophoneUsageDescription</key>
-  <string>Cue uses your microphone while you record a voice request.</string>
+  <string>cue uses your microphone while you record a voice request.</string>
   <key>NSAppleEventsUsageDescription</key>
-  <string>Cue pauses Spotify or YouTube while you dictate, then resumes playback.</string>
+  <string>cue pauses Spotify or YouTube while you dictate, then resumes playback.</string>
 </dict>
 </plist>

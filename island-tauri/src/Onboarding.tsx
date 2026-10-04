@@ -731,10 +731,14 @@ export default function Onboarding() {
                 </span>
               </button>
             ))}
+            <button onClick={() => void invoke("open_updates")}>
+              <ArrowRight size={16} />
+              <span>Updates<small>Check for a new version</small></span>
+            </button>
             <p>
               Made for your flow.
               <br />
-              <span>Cue · on this Mac</span>
+              <span>cue · on this Mac</span>
             </p>
           </nav>
         )}

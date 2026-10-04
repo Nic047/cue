@@ -18,11 +18,9 @@ export const RESULTS_VB_H = 600;
 /** Wider shoulders and a softer lower curve for the reading panel. */
 function scoopPath(W: number, H: number): string {
   return (
-    `M0 0C40 0 70 54 70 125V${H - 112}` +
-    `C70 ${H - 45} 105 ${H} 155 ${H}` +
-    `H${W - 155}` +
-    `C${W - 105} ${H} ${W - 70} ${H - 45} ${W - 70} ${H - 112}` +
-    `V125C${W - 70} 54 ${W - 40} 0 ${W} 0H0Z`
+    `M0 0Q24 0 24 32V${H - 24}Q24 ${H} 48 ${H}` +
+    `H${W - 48}Q${W - 24} ${H} ${W - 24} ${H - 24}` +
+    `V32Q${W - 24} 0 ${W} 0H0Z`
   );
 }
 
@@ -44,8 +42,8 @@ export function IslandShape({
   const isResults = variant === "results";
   const vbW = isResults ? RESULTS_VB_W : variant === "pill" && pillWidth ? (pillWidth * 448) / 220 : 448;
   const vbH = isResults ? RESULTS_VB_H : 158;
-  const radiusX = isResults ? 24 : 12 * 448 / 220;
-  const radiusY = isResults ? 24 : 12 * 158 / 42;
+  const radiusX = isResults ? 16 : 12 * 448 / 220;
+  const radiusY = isResults ? 16 : 12 * 158 / 42;
   const notchPath = `M0 0H${vbW}V${vbH - radiusY}Q${vbW} ${vbH} ${vbW - radiusX} ${vbH}H${radiusX}Q0 ${vbH} 0 ${vbH - radiusY}Z`;
   const resultsPath = notched ? notchPath : RESULTS_PATH;
   // Keep the scoop's notch curvature fixed in screen pixels as its width changes.

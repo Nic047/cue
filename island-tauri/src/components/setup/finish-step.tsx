@@ -14,7 +14,7 @@ export function FinishStep({
       </div>
       <p className="ob-eyebrow">YOU'RE ALL SET</p>
       <h1 id="ob-title">Back to your flow.</h1>
-      <p className="ob-lead">Cue is there whenever you need a hand.</p>
+      <p className="ob-lead">cue is there whenever you need a hand.</p>
       <div className="ob-reminders">
         <p>
           <kbd>{shortcutLabel}</kbd>
@@ -26,7 +26,7 @@ export function FinishStep({
         </p>
       </div>
       <p className="ob-menu-detail">
-        Change keys, open recent chats, or quit Cue from the menu bar.
+        Change keys, open recent chats, or quit cue from the menu bar.
       </p>
     </>
   );

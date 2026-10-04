@@ -18,6 +18,9 @@ static RUN_GEN: AtomicU64 = AtomicU64::new(0);
 
 #[tauri::command]
 pub fn run_task(app: AppHandle, task: String) -> Result<(), String> {
+    if crate::updates::is_installing() {
+        return Err("Wait for the update to finish.".into());
+    }
     // Stop any previous run.
     kill_task(app.clone())?;
     // Invalidate readers from older runs.
@@ -124,7 +127,7 @@ pub fn run_task(app: AppHandle, task: String) -> Result<(), String> {
                 match c.wait() {
                     Ok(status) if !status.success() => {
                         exit_error = Some(format!(
-                            "Cue agent exited unexpectedly{}.",
+                            "cue agent exited unexpectedly{}.",
                             status
                                 .code()
                                 .map(|code| format!(" with code {code}"))
@@ -132,7 +135,7 @@ pub fn run_task(app: AppHandle, task: String) -> Result<(), String> {
                         ));
                     }
                     Err(error) => {
-                        exit_error = Some(format!("Cue agent status unavailable: {error}"))
+                        exit_error = Some(format!("cue agent status unavailable: {error}"))
                     }
                     _ => {}
                 }
@@ -207,7 +210,7 @@ pub fn answer_question(app: AppHandle, text: String) -> Result<(), String> {
     }
 }
 
-/// Only open files exported by Cue; arbitrary paths from Markdown are rejected.
+/// Only open files exported by cue; arbitrary paths from Markdown are rejected.
 #[tauri::command]
 pub fn open_export(app: AppHandle, id: String) -> Result<(), String> {
     if id.is_empty()
@@ -221,7 +224,7 @@ pub fn open_export(app: AppHandle, id: String) -> Result<(), String> {
         .path()
         .download_dir()
         .map_err(|e| e.to_string())?
-        .join("Cue")
+        .join("cue")
         .canonicalize()
         .map_err(|e| e.to_string())?;
     let path = root.join(id).canonicalize().map_err(|e| e.to_string())?;

@@ -12,6 +12,92 @@ pub fn resize_window(app: AppHandle, width: f64, height: f64) -> Result<(), Stri
 }
 
 /// Hide the window so it cannot intercept clicks. Retain Escape ownership briefly for double-Escape cancellation.
+static PANEL_DISMISS: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+#[tauri::command]
+pub fn set_panel_dismiss(enabled: bool) {
+    PANEL_DISMISS.store(enabled, Ordering::SeqCst);
+}
+
+pub fn dismiss_if_outside(app: &AppHandle, x: f64, y: f64) {
+    if !PANEL_DISMISS.load(Ordering::SeqCst) {
+        return;
+    }
+    let handle = app.clone();
+    let _ = app.run_on_main_thread(move || unsafe {
+        use objc2::MainThreadMarker;
+        use objc2_app_kit::{NSScreen, NSWindow};
+        let Some(win) = handle.get_webview_window("main") else {
+            return;
+        };
+        let Ok(ptr) = win.ns_window() else {
+            return;
+        };
+        let native = &*(ptr as *const NSWindow);
+        let screens = NSScreen::screens(MainThreadMarker::new().expect("main thread"));
+        let Some(primary) = screens.firstObject() else {
+            return;
+        };
+        let frame = native.frame();
+        let appkit_y = primary.frame().size.height - y;
+        let inside = x >= frame.origin.x
+            && x <= frame.origin.x + frame.size.width
+            && appkit_y >= frame.origin.y
+            && appkit_y <= frame.origin.y + frame.size.height;
+        if !inside && PANEL_DISMISS.swap(false, Ordering::SeqCst) {
+            let _ = hide_window(handle.clone());
+            let _ = handle.emit("dismiss-panels", ());
+        }
+    });
+}
+
+/// Nonactivating panels do not receive normal blur events. Observe app changes on the main thread.
+pub fn watch_foreground(app: AppHandle) {
+    std::thread::spawn(move || {
+        let previous = std::sync::Arc::new(Mutex::new(0));
+        loop {
+            std::thread::sleep(std::time::Duration::from_millis(250));
+            let handle = app.clone();
+            let previous = previous.clone();
+            if app
+                .run_on_main_thread(move || unsafe {
+                    use objc2::MainThreadMarker;
+                    use objc2_app_kit::{NSWindow, NSWorkspace};
+                    let workspace = NSWorkspace::sharedWorkspace();
+                    let Some(front) = workspace.frontmostApplication() else {
+                        return;
+                    };
+                    let pid = front.processIdentifier();
+                    let mut last = previous.lock().unwrap();
+                    let changed = *last != 0 && *last != pid;
+                    *last = pid;
+                    if !changed
+                        || pid == std::process::id() as i32
+                        || WINDOW_HIDDEN.load(Ordering::SeqCst)
+                    {
+                        return;
+                    }
+                    if PANEL_DISMISS.swap(false, Ordering::SeqCst) {
+                        let _ = hide_window(handle.clone());
+                        let _ = handle.emit("dismiss-panels", ());
+                    } else if let Some(win) = handle.get_webview_window("main") {
+                        if MainThreadMarker::new().is_some() {
+                            if let Ok(ptr) = win.ns_window() {
+                                let native = &*(ptr as *const NSWindow);
+                                native.setLevel(1000);
+                                native.orderFrontRegardless();
+                            }
+                        }
+                    }
+                })
+                .is_err()
+            {
+                break;
+            }
+        }
+    });
+}
+
 static HIDE_GEN: AtomicU64 = AtomicU64::new(0);
 static WINDOW_HIDDEN: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(true);
 
@@ -144,7 +230,7 @@ pub fn toggle_notch_preview(app: &AppHandle) -> Result<(), String> {
             "notch-preview",
             tauri::WebviewUrl::App("notch-preview.html".into()),
         )
-        .title("Cue notch preview")
+        .title("cue notch preview")
         .inner_size(180.0, 32.0)
         .decorations(false)
         .transparent(true)
@@ -158,7 +244,7 @@ pub fn toggle_notch_preview(app: &AppHandle) -> Result<(), String> {
         .map_err(|e| e.to_string())?;
         use tauri_nspanel::WebviewWindowExt;
         let panel = preview.to_panel().map_err(|e| e.to_string())?;
-        panel.set_style_mask(1 << 7); // Nonactivating, like Cue's main panel.
+        panel.set_style_mask(1 << 7); // Nonactivating, like cue's main panel.
         panel.set_floating_panel(true);
         panel.set_hides_on_deactivate(false);
         preview
@@ -193,113 +279,127 @@ pub fn pin_top_center(win: &tauri::WebviewWindow, width: f64) -> Result<(), Stri
     {
         let window = win.clone();
         let _ = width; // Native frame dimensions are already in logical points.
+        let position = move || unsafe {
+            use objc2::{msg_send, sel, MainThreadMarker};
+            use objc2_app_kit::{NSScreen, NSWindow};
+            use objc2_foundation::NSPoint;
+            let Ok(pointer) = window.ns_window() else {
+                return;
+            };
+            let native = &*(pointer as *const NSWindow);
+            let mtm = MainThreadMarker::new().expect("main thread");
+            let pointer = objc2_app_kit::NSEvent::mouseLocation();
+            let pointer_screen = if WINDOW_HIDDEN.load(Ordering::SeqCst) {
+                NSScreen::screens(mtm).iter().find(|screen| {
+                    let f = screen.frame();
+                    pointer.x >= f.origin.x
+                        && pointer.x < f.origin.x + f.size.width
+                        && pointer.y >= f.origin.y
+                        && pointer.y < f.origin.y + f.size.height
+                })
+            } else {
+                None
+            };
+            let Some(screen) = pointer_screen
+                .or_else(|| native.screen())
+                .or_else(|| NSScreen::mainScreen(mtm))
+            else {
+                return;
+            };
+            let screen_frame = screen.frame();
+            let frame = native.frame();
+            // safeAreaInsets arrived in macOS 12; older systems have no notch.
+            let has_safe_area: bool = msg_send![&*screen, respondsToSelector: sel!(safeAreaInsets)];
+            let inset = if has_safe_area {
+                screen.safeAreaInsets().top
+            } else {
+                0.0
+            };
+            #[cfg(debug_assertions)]
+            let inset = {
+                let simulated = SIMULATE_NOTCH.load(Ordering::SeqCst);
+                if let Some(preview) = window.app_handle().get_webview_window("notch-preview") {
+                    if simulated {
+                        if let Ok(pointer) = preview.ns_window() {
+                            use objc2_app_kit::NSWindowCollectionBehavior;
+                            let overlay = &*(pointer as *const NSWindow);
+                            overlay.setCollectionBehavior(
+                                NSWindowCollectionBehavior::CanJoinAllSpaces
+                                    | NSWindowCollectionBehavior::FullScreenAuxiliary
+                                    | NSWindowCollectionBehavior::Stationary,
+                            );
+                            let (x, y) = top_center_origin(
+                                screen_frame.origin.x,
+                                screen_frame.origin.y,
+                                screen_frame.size.width,
+                                screen_frame.size.height,
+                                180.0,
+                                32.0,
+                            );
+                            overlay.setFrameOrigin(NSPoint::new(x, y));
+                            overlay.setLevel(1001);
+                            overlay.orderFrontRegardless();
+                        }
+                    } else {
+                        let _ = preview.hide();
+                    }
+                }
+                if simulated {
+                    inset.max(32.0)
+                } else {
+                    inset
+                }
+            };
+            let notch_width = if inset > 0.0 {
+                let left = screen.auxiliaryTopLeftArea();
+                let right = screen.auxiliaryTopRightArea();
+                let measured = (right.origin.x - left.origin.x - left.size.width).max(0.0);
+                #[cfg(debug_assertions)]
+                let measured = if SIMULATE_NOTCH.load(Ordering::SeqCst) {
+                    180.0
+                } else {
+                    measured
+                };
+                measured
+            } else {
+                0.0
+            };
+            let layout = NotchLayout {
+                width: notch_width,
+                height: inset,
+            };
+            let changed = {
+                let mut current = NOTCH_LAYOUT.lock().unwrap();
+                let changed = *current != layout;
+                *current = layout;
+                changed
+            };
+            if changed {
+                let _ = window.emit("notch-layout", layout);
+            }
+            let (x, y) = top_center_origin(
+                screen_frame.origin.x,
+                screen_frame.origin.y,
+                screen_frame.size.width,
+                screen_frame.size.height,
+                frame.size.width,
+                frame.size.height,
+            );
+            let x =
+                x + notch_anchor_offset(frame.size.width, frame.size.height, notch_width, inset);
+            native.setLevel(1000);
+            // Avoid a Moved-event loop when macOS relocates a disconnected display.
+            if (frame.origin.x - x).abs() > 0.5 || (frame.origin.y - y).abs() > 0.5 {
+                native.setFrameOrigin(NSPoint::new(x, y));
+            }
+        };
+        if objc2::MainThreadMarker::new().is_some() {
+            position();
+            return Ok(());
+        }
         return win
             .app_handle()
-            .run_on_main_thread(move || unsafe {
-                use objc2::{msg_send, sel, MainThreadMarker};
-                use objc2_app_kit::{NSScreen, NSWindow};
-                use objc2_foundation::NSPoint;
-                let Ok(pointer) = window.ns_window() else {
-                    return;
-                };
-                let native = &*(pointer as *const NSWindow);
-                let Some(screen) = native.screen().or_else(|| {
-                    NSScreen::mainScreen(MainThreadMarker::new().expect("main thread"))
-                }) else {
-                    return;
-                };
-                let screen_frame = screen.frame();
-                let frame = native.frame();
-                // safeAreaInsets arrived in macOS 12; older systems have no notch.
-                let has_safe_area: bool =
-                    msg_send![&*screen, respondsToSelector: sel!(safeAreaInsets)];
-                let inset = if has_safe_area {
-                    screen.safeAreaInsets().top
-                } else {
-                    0.0
-                };
-                #[cfg(debug_assertions)]
-                let inset = {
-                    let simulated = SIMULATE_NOTCH.load(Ordering::SeqCst);
-                    if let Some(preview) = window.app_handle().get_webview_window("notch-preview") {
-                        if simulated {
-                            if let Ok(pointer) = preview.ns_window() {
-                                use objc2_app_kit::NSWindowCollectionBehavior;
-                                let overlay = &*(pointer as *const NSWindow);
-                                overlay.setCollectionBehavior(
-                                    NSWindowCollectionBehavior::CanJoinAllSpaces
-                                        | NSWindowCollectionBehavior::FullScreenAuxiliary
-                                        | NSWindowCollectionBehavior::Stationary,
-                                );
-                                let (x, y) = top_center_origin(
-                                    screen_frame.origin.x,
-                                    screen_frame.origin.y,
-                                    screen_frame.size.width,
-                                    screen_frame.size.height,
-                                    180.0,
-                                    32.0,
-                                );
-                                overlay.setFrameOrigin(NSPoint::new(x, y));
-                                overlay.setLevel(1001);
-                                overlay.orderFrontRegardless();
-                            }
-                        } else {
-                            let _ = preview.hide();
-                        }
-                    }
-                    if simulated {
-                        inset.max(32.0)
-                    } else {
-                        inset
-                    }
-                };
-                let notch_width = if inset > 0.0 {
-                    let left = screen.auxiliaryTopLeftArea();
-                    let right = screen.auxiliaryTopRightArea();
-                    let measured = (right.origin.x - left.origin.x - left.size.width).max(0.0);
-                    #[cfg(debug_assertions)]
-                    let measured = if SIMULATE_NOTCH.load(Ordering::SeqCst) {
-                        180.0
-                    } else {
-                        measured
-                    };
-                    measured
-                } else {
-                    0.0
-                };
-                let layout = NotchLayout {
-                    width: notch_width,
-                    height: inset,
-                };
-                let changed = {
-                    let mut current = NOTCH_LAYOUT.lock().unwrap();
-                    let changed = *current != layout;
-                    *current = layout;
-                    changed
-                };
-                if changed {
-                    let _ = window.emit("notch-layout", layout);
-                }
-                let (x, y) = top_center_origin(
-                    screen_frame.origin.x,
-                    screen_frame.origin.y,
-                    screen_frame.size.width,
-                    screen_frame.size.height,
-                    frame.size.width,
-                    frame.size.height,
-                );
-                let x = x + notch_anchor_offset(
-                    frame.size.width,
-                    frame.size.height,
-                    notch_width,
-                    inset,
-                );
-                native.setLevel(1000);
-                // Avoid a Moved-event loop when macOS relocates a disconnected display.
-                if (frame.origin.x - x).abs() > 0.5 || (frame.origin.y - y).abs() > 0.5 {
-                    native.setFrameOrigin(NSPoint::new(x, y));
-                }
-            })
+            .run_on_main_thread(position)
             .map_err(|e| e.to_string());
     }
     #[cfg(not(target_os = "macos"))]

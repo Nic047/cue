@@ -78,7 +78,7 @@ export function ResultsPanel({
           className="agent-detail absolute inset-0"
           style={{
             paddingTop: 24 + notchHeight,
-            paddingInline: notched ? 32 : "10%",
+            paddingInline: notched ? 28 : 48,
           }}
           data-revealed={resultsRevealed}
           data-skeleton-ready={skeletonReady}

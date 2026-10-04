@@ -324,7 +324,7 @@ body,
     gap: 12px;
     min-width: 0;
     color: #bdbdbd;
-    font-size: 15px;
+    font-size: 13px;
     white-space: nowrap;
     font-variant-numeric: tabular-nums;
 }
@@ -343,7 +343,7 @@ body,
     align-items: center;
     justify-content: center;
     gap: 7px;
-    min-width: 124px;
+    min-width: 82px;
     height: 32px;
     padding: 0 14px;
     border: 0;
@@ -388,7 +388,7 @@ body,
     overflow-y: auto;
     pointer-events: auto;
     overscroll-behavior: contain;
-    padding: 18px 0 64px;
+    padding: 18px 0 36px;
     cursor: default;
     scrollbar-width: none;
 }
@@ -400,7 +400,7 @@ body,
     right: 0;
     bottom: 0;
     left: 0;
-    height: 64px;
+    height: 36px;
     pointer-events: none;
     background: linear-gradient(to bottom, transparent, #000 92%);
     -webkit-backdrop-filter: blur(8px);
@@ -554,3 +554,24 @@ body,
 }
 @media (max-width: 420px) { .agent-question-options { grid-template-columns: minmax(0, 1fr); } }
 @media (prefers-reduced-motion: reduce) { .agent-question-option { transition: none; } }
+
+/* Recent work: one shared inset and clear, quiet row hierarchy. */
+.recent-chats-dialog { box-sizing: border-box; width: 100%; height: 100%; padding: 20px; display: flex; flex-direction: column; background: #101010; color: #eee; font-family: var(--font-sans); user-select: none; -webkit-user-select: none; border-radius: 0 0 14px 14px; }
+.recent-header { display: flex; align-items: center; justify-content: space-between; flex: none; padding: 0 4px 18px; }
+.recent-eyebrow { color: #666; font-size: 9px; letter-spacing: .12em; }
+.recent-header h2 { margin: 5px 0 0; font-size: 16px; font-weight: 500; }
+.recent-close { display: grid; place-items: center; width: 28px; height: 28px; border: 0; border-radius: 7px; color: #888; background: #1c1c1c; cursor: pointer; }
+.recent-close:hover { color: #eee; background: #292929; }
+.recent-list { min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.recent-chat-item { display: flex; align-items: center; gap: 12px; width: 100%; padding: 13px 10px; border: 0; border-bottom: 1px solid #222; border-radius: 6px; background: transparent; color: inherit; text-align: left; cursor: pointer; }
+.recent-chat-item:last-child { border-bottom-color: transparent; }
+.recent-chat-icon { flex: none; display: grid; place-items: center; width: 30px; height: 30px; color: #777; background: #1c1c1c; border-radius: 7px; }
+.recent-chat-copy { display: grid; gap: 5px; min-width: 0; flex: 1; }
+.recent-chat-title, .recent-chat-preview { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.recent-chat-title { font-size: 13px; font-weight: 500; }
+.recent-chat-preview { font-size: 11px; color: #777; }
+.recent-chat-trailing { display: flex; align-items: center; gap: 8px; color: #555; }
+.recent-chat-trailing small { font-size: 9px; color: #777; }
+.recent-empty { display: grid; justify-items: center; gap: 10px; padding: 44px 16px; color: #777; font-size: 11px; }
+.recent-empty p { color: #ccc; font-size: 13px; margin: 0; }
+.recent-chat-item:focus-visible, .recent-close:focus-visible { outline: 1px solid #888; outline-offset: -1px; }
