@@ -4,7 +4,7 @@ Source changes do not update installed apps. The **Release macOS** workflow buil
 
 ## One-time setup
 
-Add the private update signing key as the GitHub repository Actions secret `TAURI_SIGNING_PRIVATE_KEY`. The matching public key is already configured in `island-tauri/src-tauri/tauri.conf.json`. If the key has a password, add `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` too.
+Add the private update signing key as the GitHub repository Actions secret `TAURI_SIGNING_PRIVATE_KEY`. The matching public key is already configured in `cue-app/src-tauri/tauri.conf.json`. If the key has a password, add `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` too.
 
 Keep a secure backup of the private key. Never commit it, publish it, or regenerate it for ordinary releases. Losing it prevents updates for already installed copies. Local keys and build artifacts belong in the ignored `.local/release/` directory.
 
@@ -12,7 +12,7 @@ Updater signatures authenticate app updates. They are separate from Apple Develo
 
 ## Publish a release
 
-1. Set the same new version in `island-tauri/package.json`, `island-tauri/src-tauri/Cargo.toml` and `island-tauri/src-tauri/tauri.conf.json`. Refresh the lockfiles and commit the source.
+1. Set the same new version in `cue-app/package.json`, `cue-app/src-tauri/Cargo.toml` and `cue-app/src-tauri/tauri.conf.json`. Refresh the lockfiles and commit the source.
 2. Push a matching tag, such as `v0.1.7`, or manually run **Release macOS** against the desired commit.
 3. Wait for the release to finish. It publishes `cue-apple-silicon.dmg`, `cue.app.tar.gz`, its `.sig`, and `latest.json`.
 4. Once the release exists, use `https://github.com/Nic047/cue/releases/latest/download/cue-apple-silicon.dmg` for the website's download button. Keep old download links working.
@@ -24,7 +24,7 @@ Users on 0.1.6 or earlier need to manually install the first updater-enabled rel
 ## Package locally
 
 ```sh
-cd island-tauri
+cd cue-app
 bun run bundle:unsigned
 cd ..
 node scripts/package-update.mjs

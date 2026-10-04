@@ -22,12 +22,12 @@ cue has three parts: a React interface, a native Tauri host, and a Node sidecar.
 | JSONL event emission | `agent/events.ts` |
 | Shared event union and runtime validation | `shared/agent-events.ts` |
 | Bounded waiting and disposal of late resources | `shared/wait-with-timeout.ts` |
-| Sidecar spawning, stopping and stdin | `island-tauri/src-tauri/src/orchestrator_bridge.rs` |
-| Window presentation, notch positioning and morphing | `island-tauri/src-tauri/src/window_layout.rs` |
-| Setup step views and model picker | `island-tauri/src/components/setup/` |
-| Setup shortcut capture | `island-tauri/src/lib/use-shortcut-recorder.ts` |
-| Result view and recent chats | `island-tauri/src/components/results-panel.tsx`, `recent-chats-dialog.tsx` |
-| Pill shortcut controller | `island-tauri/src/lib/use-pill-shortcuts.ts` |
+| Sidecar spawning, stopping and stdin | `cue-app/src-tauri/src/orchestrator_bridge.rs` |
+| Window presentation, notch positioning and morphing | `cue-app/src-tauri/src/window_layout.rs` |
+| Setup step views and model picker | `cue-app/src/components/setup/` |
+| Setup shortcut capture | `cue-app/src/lib/use-shortcut-recorder.ts` |
+| Result view and recent chats | `cue-app/src/components/results-panel.tsx`, `recent-chats-dialog.tsx` |
+| Pill shortcut controller | `cue-app/src/lib/use-pill-shortcuts.ts` |
 
 ## Lifecycle and trust boundaries
 

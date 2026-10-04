@@ -13,11 +13,11 @@ target/
 .vscode/*
 .agents/
 
-/island-tauri/src-tauri/resources/agent-runtime/*
-!/island-tauri/src-tauri/resources/agent-runtime/.gitkeep
+/cue-app/src-tauri/resources/agent-runtime/*
+!/cue-app/src-tauri/resources/agent-runtime/.gitkeep
 
-/island-tauri/src-tauri/resources/agent-runtime.staging-*
-/island-tauri/src-tauri/resources/agent-runtime.previous/
+/cue-app/src-tauri/resources/agent-runtime.staging-*
+/cue-app/src-tauri/resources/agent-runtime.previous/
 
 /landing/downloads/*.dmg
 

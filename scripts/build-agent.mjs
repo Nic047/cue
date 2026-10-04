@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 if (Number(process.versions.node.split('.')[0]) < 22) throw new Error('Build with Node.js 22 or newer.');
 if (process.platform !== 'darwin' || process.arch !== 'arm64') throw new Error('Cue currently packages Apple Silicon macOS only; use an arm64 Node runtime.');
-const destinationRoot = join(root, 'island-tauri/src-tauri/resources/agent-runtime');
+const destinationRoot = join(root, 'cue-app/src-tauri/resources/agent-runtime');
 const output = destinationRoot + '.staging-' + process.pid;
 await mkdir(output, { recursive: true });
 try {

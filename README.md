@@ -28,7 +28,7 @@ Development requires macOS, Apple Silicon, Node.js 22 or later, Bun, and the Rus
 
 ```sh
 bun install
-cd island-tauri
+cd cue-app
 bun install
 CUE_PROJECT_DIR=.. bun run tauri dev
 ```
@@ -39,16 +39,16 @@ The landing page lives in `landing/` and can be served with any static web serve
 
 ## Build an unsigned app
 
-From the repository root, install the build-only DMG tools once, then build from `island-tauri/`:
+From the repository root, install the build-only DMG tools once, then build from `cue-app/`:
 
 ```sh
 python3 -m venv /private/tmp/cue-dmg-tools
 /private/tmp/cue-dmg-tools/bin/python -m pip install -r scripts/requirements-dmg.txt
-cd island-tauri
+cd cue-app
 bun run bundle:unsigned
 ```
 
-The app is created under `island-tauri/src-tauri/target/release/bundle/macos/`; the DMG is written to `landing/downloads/`. These Python packages are used only to lay out the installer and are not shipped with cue. The app is ad hoc signed but not notarized, and standard Gatekeeper installation is not verified. Signing and notarizing the complete app—including its embedded Node runtime and sidecar—are still required for a smooth public release.
+The app is created under `cue-app/src-tauri/target/release/bundle/macos/`; the DMG is written to `landing/downloads/`. These Python packages are used only to lay out the installer and are not shipped with cue. The app is ad hoc signed but not notarized, and standard Gatekeeper installation is not verified. Signing and notarizing the complete app—including its embedded Node runtime and sidecar—are still required for a smooth public release.
 
 ## Updates
 
@@ -60,7 +60,7 @@ cue stores app credentials in the macOS Keychain. Voice audio is sent to Groq fo
 
 ## Repository layout
 
-- `island-tauri/` — macOS app and UI
+- `cue-app/` — macOS app and UI
 - `orchestrator.ts`, `browser-tools.ts`, `sandbox-tools.ts` — task orchestration and agent tools
 - `agent/`, `shared/` — planning, execution, result synthesis, and validated events
 - `scripts/` — packaging and local checks
@@ -78,4 +78,4 @@ Please report suspected vulnerabilities privately. See [SECURITY.md](SECURITY.md
 
 ## License
 
-cue is licensed under the [MIT License](LICENSE). Bundled Geist fonts use the [SIL Open Font License](island-tauri/public/OFL-Geist.txt); dependencies retain their respective licenses.
+cue is licensed under the [MIT License](LICENSE). Bundled Geist fonts use the [SIL Open Font License](cue-app/public/OFL-Geist.txt); dependencies retain their respective licenses.

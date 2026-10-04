@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "start": "tsx orchestrator.ts",
-    "check": "node --import tsx scripts/check-sandbox.ts && node --import tsx scripts/check-runtime-contract.ts && tsc --noEmit --module nodenext --moduleResolution nodenext --target es2022 --skipLibCheck orchestrator.ts sandbox-tools.ts browser-tools.ts && cd island-tauri && bun run build"
+    "check": "node --import tsx scripts/check-sandbox.ts && node --import tsx scripts/check-runtime-contract.ts && tsc --noEmit --module nodenext --moduleResolution nodenext --target es2022 --skipLibCheck orchestrator.ts sandbox-tools.ts browser-tools.ts && cd cue-app && bun run build"
   },
   "dependencies": {
     "@solarisdk/browser": "^0.1.3",

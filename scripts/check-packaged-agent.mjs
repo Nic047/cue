@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
-const bundle = join(root, 'island-tauri/src-tauri/target/release/bundle/macos/cue.app/Contents');
+const bundle = join(root, 'cue-app/src-tauri/target/release/bundle/macos/cue.app/Contents');
 const isolated = await mkdtemp(join(tmpdir(), 'cue-packaged-check-'));
 try {
   await cp(join(bundle, 'Resources/agent-runtime'), join(isolated, 'runtime'), { recursive: true });
