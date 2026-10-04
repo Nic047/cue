@@ -1,0 +1,25 @@
+// Publish only the final, sealed app; Tauri's earlier archive would miss post-build signing.
+import { cp, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+const root = dirname(dirname(fileURLToPath(import.meta.url)));
+const config = JSON.parse(await readFile(join(root, 'island-tauri/src-tauri/tauri.conf.json'), 'utf8'));
+const version = config.version;
+if (process.platform !== 'darwin' || process.arch !== 'arm64') throw new Error('Release packages require an Apple Silicon macOS build.');
+const app = join(root, 'island-tauri/src-tauri/target/release/bundle/macos', `${config.productName}.app`);
+execFileSync('/usr/bin/codesign', ['--verify', '--deep', '--strict', app]);
+const directory = join(root, '.local/release/artifacts');
+await mkdir(directory, { recursive: true });
+const archive = join(directory, 'cue.app.tar.gz');
+execFileSync('/usr/bin/tar', ['-czf', archive, '-C', dirname(app), `${config.productName}.app`], { env: { ...process.env, COPYFILE_DISABLE: '1' } });
+const keyPath = process.env.TAURI_SIGNING_PRIVATE_KEY_PATH || join(root, '.local/release/updater.key');
+if (!process.env.TAURI_SIGNING_PRIVATE_KEY && !existsSync(keyPath)) throw new Error('Set TAURI_SIGNING_PRIVATE_KEY or TAURI_SIGNING_PRIVATE_KEY_PATH to the release signing key.');
+const keyArgs = process.env.TAURI_SIGNING_PRIVATE_KEY ? [] : ['--private-key-path', keyPath];
+execFileSync(join(root, 'island-tauri/node_modules/.bin/tauri'), ['signer', 'sign', ...keyArgs, archive], { cwd: join(root, 'island-tauri'), stdio: 'pipe', env: { ...process.env, TAURI_SIGNING_PRIVATE_KEY_PASSWORD: process.env.TAURI_SIGNING_PRIVATE_KEY_PASSWORD ?? '' } });
+const signature = (await readFile(archive + '.sig', 'utf8')).trim();
+const notes = process.env.CUE_RELEASE_NOTES || `cue ${version}: improvements to panels, shortcuts, setup and updates.`;
+await writeFile(join(directory, 'latest.json'), JSON.stringify({ version, notes, pub_date: new Date().toISOString(), platforms: { 'darwin-aarch64': { signature, url: `https://github.com/Nic047/cue/releases/download/v${version}/cue.app.tar.gz` } } }, null, 2) + '\n');
+await cp(join(root, `landing/downloads/cue-${version}-apple-silicon.dmg`), join(directory, 'cue-apple-silicon.dmg'));
+console.log(`Signed updater and installer ready in ${directory}`);

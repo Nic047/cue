@@ -10,7 +10,7 @@ func text(_ value: String, y: CGFloat, size: CGFloat, shade: CGFloat, weight: NS
     (value as NSString).draw(in: NSRect(x: 30, y: y, width: 580, height: size * 1.6), withAttributes: [.font: NSFont.systemFont(ofSize: size, weight: weight), .foregroundColor: NSColor(calibratedWhite: shade, alpha: 1), .paragraphStyle: style])
 }
 text("A little help. Right at home.", y: 322, size: 26, shade: 0.93, weight: .medium)
-text("Drag Cue into Applications to get started.", y: 287, size: 13, shade: 0.55)
+text("Drag cue into Applications to get started.", y: 287, size: 13, shade: 0.55)
 for x: CGFloat in [100, 420] {
     NSColor(calibratedWhite: 0.105, alpha: 1).setFill()
     NSBezierPath(roundedRect: NSRect(x: x, y: 138, width: 120, height: 120), xRadius: 26, yRadius: 26).fill()

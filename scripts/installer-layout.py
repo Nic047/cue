@@ -29,11 +29,11 @@ with DSStore.open(str(volume / '.DS_Store'), 'w+') as store:
     }
     store['.']['vSrn'] = ('long', 1)
     store['.']['icvl'] = ('type', b'icnv')
-    store['Cue.app']['Iloc'] = (a["x"], a["y"])
+    store['cue.app']['Iloc'] = (a["x"], a["y"])
     store['Applications']['Iloc'] = (f["x"], f["y"])
 # Catch an unreadable layout before distributing the image.
 with DSStore.open(str(volume / '.DS_Store'), 'r') as store:
     assert store['.']['icvl'] == (b'type', b'icnv')
     assert store['.']['icvp']['backgroundType'] == 2
-    assert store['Cue.app']['Iloc'] == (a["x"], a["y"])
+    assert store['cue.app']['Iloc'] == (a["x"], a["y"])
     assert store['Applications']['Iloc'] == (f["x"], f["y"])

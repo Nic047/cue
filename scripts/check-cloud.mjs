@@ -11,7 +11,7 @@ await mkdir(output, { recursive: true });
 const home = join(output, 'home');
 await mkdir(home, { recursive: true });
 const runtime = join(output, 'runtime');
-await cp(join(root, 'island-tauri/src-tauri/target/release/bundle/macos/Cue.app/Contents/Resources/agent-runtime'), runtime, { recursive: true });
+await cp(join(root, 'island-tauri/src-tauri/target/release/bundle/macos/cue.app/Contents/Resources/agent-runtime'), runtime, { recursive: true });
 const env = { PATH: '/usr/bin:/bin', HOME: home };
 for (const name of ['SOLARI_API_KEY', 'AI_GATEWAY_API_KEY', 'GROQ_API_KEY', 'CHEAP_MODEL', 'FALLBACK_MODEL', 'PLANNER_MODEL']) if (process.env[name]) env[name] = process.env[name];
 assert.ok(env.SOLARI_API_KEY && env.AI_GATEWAY_API_KEY, 'Missing provider keys');
